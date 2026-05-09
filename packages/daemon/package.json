@@ -1,0 +1,30 @@
+{
+  "name": "@visual-edit/daemon",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+  },
+  "bin": {
+    "visual-edit-daemon": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@visual-edit/shared": "*",
+    "@visual-edit/protocol": "*",
+    "@visual-edit/diagnostics": "*",
+    "@visual-edit/project-analyzer": "*",
+    "@visual-edit/adapter-vite": "*",
+    "@visual-edit/preview-worker": "*",
+    "ws": "8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "8.5.13"
+  }
+}
