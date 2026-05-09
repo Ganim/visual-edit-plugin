@@ -349,7 +349,7 @@ git push origin main
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" }
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
   },
   "scripts": {
     "build": "tsc -b",
@@ -571,7 +571,7 @@ git push origin main
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" }
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
   },
   "scripts": {
     "build": "tsc -b",
@@ -829,7 +829,7 @@ git push origin main
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" }
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
   },
   "scripts": {
     "build": "tsc -b",
@@ -1103,7 +1103,7 @@ git push origin main
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" }
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
   },
   "scripts": {
     "build": "tsc -b",
@@ -1868,7 +1868,7 @@ git push origin main
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" }
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
   },
   "scripts": {
     "build": "tsc -b",
@@ -2198,7 +2198,7 @@ git push origin main
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" }
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
   },
   "scripts": {
     "build": "tsc -b",
@@ -2769,7 +2769,7 @@ git push origin main
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" }
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
   },
   "bin": {
     "visual-edit-preview-worker": "dist/index.js"
@@ -2969,7 +2969,7 @@ git push origin main
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" }
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
   },
   "bin": {
     "visual-edit-daemon": "dist/cli.js"
@@ -3712,7 +3712,7 @@ git push origin main
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" }
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
   },
   "bin": {
     "visual-edit-mcp-server": "dist/cli.js"
