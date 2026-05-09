@@ -1,0 +1,23 @@
+{
+  "name": "@visual-edit/preview-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+  },
+  "bin": {
+    "visual-edit-preview-worker": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@visual-edit/shared": "*",
+    "@visual-edit/protocol": "*",
+    "@visual-edit/adapter-vite": "*"
+  }
+}
