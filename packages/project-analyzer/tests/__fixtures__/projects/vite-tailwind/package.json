@@ -1,0 +1,14 @@
+{
+  "name": "fixture-vite-tailwind",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "vite": "5.4.10",
+    "@vitejs/plugin-react": "4.3.3",
+    "tailwindcss": "3.4.14"
+  }
+}
