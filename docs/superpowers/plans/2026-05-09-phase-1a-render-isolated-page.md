@@ -8,14 +8,21 @@
 
 **Tech Stack:** Node 22+ (ESM-only), TypeScript 5.6+, npm workspaces, vitest, Zod, jiti (TS config loader), `@faker-js/faker`, `@modelcontextprotocol/sdk` (stdio), `chokidar` (Phase 1.C), Vite 5, React 18, Tailwind 3, Zustand, `ws` for WebSocket, `cross-spawn` for child processes.
 
-**Phase 1.A scope explicitly OUT:** code-mods (no editing), editor-ui overlay (no Properties panel / handles / color picker), Ask-AI queue + WAL, asset-proxy beyond `placeholder` strategy, multi-session daemon discovery, CRA adapter, `findApiContracts`, `buildMSWHandlers`, full diagnostics logger redaction policy, lock-file takeover, ProjectAnalyzer cache invalidation. These belong to Phase 1.B / 1.C.
+**Phase 1.A scope explicitly OUT:** code-mods (no editing), editor-ui in any form (iframe wrapper, overlay, properties panel, handles, color picker — entire `packages/editor-ui/` deferred to 1.B), Ask-AI queue + WAL, asset-proxy beyond placeholder strategy, multi-session daemon discovery, CRA adapter, `findApiContracts`, `buildMSWHandlers`, full diagnostics logger redaction policy, lock-file takeover, ProjectAnalyzer cache invalidation, MCP-driven daemon auto-spawn (user starts daemon manually for 1.A), HMR validation in e2e (HMR works because Vite handles it natively, but proving it in a Playwright test is deferred). These belong to Phase 1.B / 1.C.
+
+**Documented 1.A operating constraints:**
+- `loadConfig` env-var sandbox via `Object.defineProperty(process, 'env', …)` is best-effort. jiti v2 may execute the user's config in a context that bypasses the swap, so unsafe-env detection is not a strong security guarantee in 1.A — Phase 1.C will harden this with a real VM context. The plan still installs the swap because it catches the common case (top-level `process.env.SECRET` reads) and provides the contract surface that the hardened version preserves.
+- The MCP server requires the daemon to be already running (started in a separate terminal). Auto-spawn is deferred to 1.B.
+- The e2e test (Task 19) requires `npm install` at the repo root before running, so workspace deps are hoisted and `examples/basic-vite/visual-edit.config.ts` can resolve `@tanstack/react-query` via jiti.
+- Playwright tests require `npx playwright install --with-deps chromium` before the first run; this is added as a pretest hook in `tests/e2e/package.json`.
 
 **Acceptance** (the gate that ends Phase 1.A): `examples/basic-vite/` is a real Vite+React+TS+Tailwind project with `visual-edit.config.ts` defining a `wrapPage` and one Zod-derived schema. Running:
 ```
 node packages/daemon/dist/cli.js start --root examples/basic-vite &
+# (mcp-server reads daemon port from .visual-edit/daemon.lock)
 node packages/mcp-server/dist/cli.js call open_page '{"root":"examples/basic-vite","page":"src/pages/Home.tsx"}'
 ```
-returns `{ url: "http://localhost:5180/?session=...", sessionId: "..." }`. Opening that URL in a browser shows `Home.tsx` rendered, wrapped by `wrapPage`, with `useUser()` (or equivalent React-Query call) showing faker-derived data. Console: zero errors. The page is interactive (clicks work, HMR works on file save).
+returns `{ url: "http://127.0.0.1:5180/", sessionId: "..." }`. Opening that URL **directly** in a browser shows `Home.tsx` rendered, wrapped by `wrapPage`, with Tailwind styles applied and `useUser()` showing faker-derived data sourced from `globalThis.__VE_MOCKS.makeUser()`. Console: zero errors. Interactive (clicks work). No editor-ui involved — that's 1.B.
 
 ---
 
@@ -113,26 +120,14 @@ visual-edit-plugin/
 │   │   │   └── cli.ts              — `daemon start --root <path>`
 │   │   └── tests/
 │   │
-│   ├── editor-ui/
-│   │   ├── package.json
-│   │   ├── tsconfig.json
-│   │   ├── vite.config.ts          — real Vite config (this IS a Vite app)
-│   │   ├── index.html
-│   │   ├── src/
-│   │   │   ├── main.tsx
-│   │   │   ├── App.tsx             — connects WS, shows iframe with preview URL
-│   │   │   ├── ws-client.ts
-│   │   │   └── state.ts            — Zustand store (sessionId, snapshot, status)
-│   │   └── tests/
-│   │
 │   └── mcp-server/
 │       ├── package.json
 │       ├── tsconfig.json
 │       ├── src/
-│       │   ├── index.ts            — entry: spawns daemon if not running, registers tools
+│       │   ├── index.ts            — registers tools on a Server instance
 │       │   ├── tools.ts            — open_page, close_preview, get_status
 │       │   ├── daemonClient.ts     — HTTP client for talking to daemon
-│       │   └── cli.ts              — used by .mcp.json command
+│       │   └── cli.ts              — stdio entry; reads .visual-edit/daemon.lock to discover daemon port
 │       └── tests/
 │
 ├── apps/
@@ -176,14 +171,16 @@ visual-edit-plugin/
 Tasks 1-4 lay the workspace + pure-type packages (parallelizable in theory; sequenced for clarity).
 Tasks 5-8 build `project-analyzer` (each sub-piece TDD'd independently).
 Tasks 9-10 build `mock-runtime`.
-Tasks 11-12 build `adapters/vite` and `preview-worker` (worker depends on adapter's IPC contract).
-Tasks 13-15 build `daemon` (lockFile + portFinder, then http + supervisor, then daemon orchestration).
-Task 16: `mcp-server`.
-Task 17: `editor-ui` minimal.
-Task 18: `apps/claude-plugin`.
-Task 19: `examples/basic-vite` seed project.
-Task 20: end-to-end smoke + acceptance gate.
-Task 21: doc updates (changelog, README, mark Phase 1.A complete in spec).
+Tasks 11-12 build `adapters/vite` (generate, then spawn).
+Task 13 builds `preview-worker` (depends on adapter's IPC contract).
+Tasks 14-15 build `daemon` (lockFile + portFinder, then http + ws + supervisor + daemon orchestration).
+Task 16: `mcp-server` (reads daemon port from lockfile).
+Task 17: `apps/claude-plugin` (manifest + slash command + skill + .mcp.json).
+Task 18: `examples/basic-vite` seed project.
+Task 19: end-to-end smoke + acceptance gate (renamed from Task 20).
+Task 20: doc updates (changelog, README, mark Phase 1.A complete in spec — renamed from Task 21).
+
+**Note: editor-ui (`packages/editor-ui/`) is intentionally NOT in this plan.** It was originally Task 17 but was dropped during plan review — the 1.A acceptance criterion is "user opens the synthetic Vite URL directly", and the editor-ui only becomes load-bearing in Phase 1.B when an overlay is added. Building an empty iframe wrapper now would create routing complexity (editor-ui's port vs daemon's port vs synthetic preview's port, WebSocket proxying) without delivering 1.A value.
 
 ---
 
@@ -192,6 +189,7 @@ Task 21: doc updates (changelog, README, mark Phase 1.A complete in spec).
 **Files:**
 - Create: `package.json` (root)
 - Create: `tsconfig.base.json`
+- Create: `packages/tsconfig.json` (solution file: composite project references in topological build order)
 - Create: `.npmrc`
 - Create: `.prettierrc.json`
 - Modify: `.gitignore` (root, exists from spike)
@@ -206,12 +204,12 @@ Task 21: doc updates (changelog, README, mark Phase 1.A complete in spec).
   "engines": { "node": ">=22.0.0" },
   "type": "module",
   "scripts": {
-    "build": "tsc -b packages",
+    "build": "tsc -b packages/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "prettier --check .",
     "format": "prettier --write .",
-    "clean": "tsc -b packages --clean && rimraf packages/*/dist"
+    "clean": "tsc -b packages/tsconfig.json --clean && rimraf packages/*/dist packages/adapters/*/dist"
   },
   "devDependencies": {
     "typescript": "5.6.3",
@@ -253,6 +251,27 @@ Task 21: doc updates (changelog, README, mark Phase 1.A complete in spec).
 ```
 
 (Note: `allowImportingTsExtensions` is false here so packages can compile to dist/ and consume each other via package.json `exports`. The spike kept it true for direct .ts execution; production packages need real builds.)
+
+- [ ] **Step 2.5: Create packages/tsconfig.json (solution file)**
+
+This is the project-references solution file that `tsc -b` consumes. References must be in topological build order.
+
+```json
+{
+  "files": [],
+  "references": [
+    { "path": "./shared" },
+    { "path": "./protocol" },
+    { "path": "./diagnostics" },
+    { "path": "./project-analyzer" },
+    { "path": "./mock-runtime" },
+    { "path": "./adapters/vite" },
+    { "path": "./preview-worker" },
+    { "path": "./daemon" },
+    { "path": "./mcp-server" }
+  ]
+}
+```
 
 - [ ] **Step 3: Create .npmrc**
 
@@ -300,7 +319,7 @@ Expected: TypeScript 5.6.3, Vitest 2.1.4, Prettier 3.3.3.
 - [ ] **Step 7: Commit + push**
 
 ```bash
-git add package.json tsconfig.base.json .npmrc .prettierrc.json .gitignore package-lock.json
+git add package.json tsconfig.base.json packages/tsconfig.json .npmrc .prettierrc.json .gitignore package-lock.json
 git commit -m "chore: bootstrap phase 1.a monorepo (npm workspaces)"
 git push origin main
 ```
@@ -2043,29 +2062,33 @@ import { buildEntryWrapper } from '../src/entryWrapper.js';
 describe('buildEntryWrapper', () => {
   it('emits a React entry that imports the page + config and mounts it wrapped', () => {
     const code = buildEntryWrapper({
-      pageImportPath: '/abs/path/to/Home.tsx',
-      configImportPath: '/abs/path/to/visual-edit.config.ts',
+      pageImportPath: '../../src/pages/Home.tsx',
+      configImportPath: '../../visual-edit.config.ts',
       fakerBindingsImportPath: './faker-bindings.ts',
+      userCssImportPath: '../../src/index.css',
       sessionId: 'sess-123',
     });
     expect(code).toContain(`import { createRoot } from 'react-dom/client';`);
-    expect(code).toContain(`import Page from '/abs/path/to/Home.tsx';`);
-    expect(code).toContain(`import config from '/abs/path/to/visual-edit.config.ts';`);
+    expect(code).toContain(`import Page from '../../src/pages/Home.tsx';`);
+    expect(code).toContain(`import config from '../../visual-edit.config.ts';`);
     expect(code).toContain(`import * as mocks from './faker-bindings.ts';`);
+    expect(code).toContain(`import '../../src/index.css';`);
     expect(code).toContain(`(globalThis as any).__VE_MOCKS = mocks;`);
     expect(code).toContain(`const wrapped = config.wrapPage(<Page />);`);
     expect(code).toContain(`createRoot(document.getElementById('root')!).render`);
-    expect(code).toContain(`sess-123`); // sessionId carried for editor-ui handshake
+    expect(code).toContain(`sess-123`); // sessionId carried for handshake/debugging
   });
 
   it('falls back to identity wrapPage when config is null', () => {
     const code = buildEntryWrapper({
-      pageImportPath: '/abs/path/to/Home.tsx',
+      pageImportPath: '../../src/pages/Home.tsx',
       configImportPath: null,
       fakerBindingsImportPath: './faker-bindings.ts',
+      userCssImportPath: null,
       sessionId: 'sess-x',
     });
     expect(code).not.toContain(`import config from`);
+    expect(code).not.toContain(`src/index.css`);
     expect(code).toContain(`const wrapped = (<Page />);`);
   });
 });
@@ -2084,9 +2107,14 @@ Expected: FAIL — module not found.
 `packages/mock-runtime/src/entryWrapper.ts`:
 ```ts
 export interface BuildEntryWrapperInput {
+  /** Relative path from the ephemeral entry's location to the user's page file. */
   pageImportPath: string;
+  /** Relative path to visual-edit.config.ts, or null if the user has none. */
   configImportPath: string | null;
+  /** Relative path to the generated faker-bindings.ts (sibling of the entry). */
   fakerBindingsImportPath: string;
+  /** Relative path to the user's global CSS (e.g. src/index.css with Tailwind directives), or null. */
+  userCssImportPath: string | null;
   sessionId: string;
 }
 
@@ -2095,6 +2123,10 @@ export function buildEntryWrapper(input: BuildEntryWrapperInput): string {
   lines.push(`// Auto-generated synthetic entry by @visual-edit/mock-runtime — do not edit.`);
   lines.push(`import { createRoot } from 'react-dom/client';`);
   lines.push(`import * as mocks from '${input.fakerBindingsImportPath}';`);
+  if (input.userCssImportPath) {
+    // Side-effect import — must come before Page so Tailwind utilities resolve.
+    lines.push(`import '${input.userCssImportPath}';`);
+  }
   lines.push(`import Page from '${input.pageImportPath}';`);
   if (input.configImportPath) {
     lines.push(`import config from '${input.configImportPath}';`);
@@ -2283,7 +2315,9 @@ describe('generateEphemeralPreview', () => {
     expect(existsSync(result.indexHtmlPath)).toBe(true);
 
     const entry = readFileSync(result.entryPath, 'utf8');
-    expect(entry).toContain(`import Page from '${page.filePath.replace(/\\/g, '/')}';`);
+    // Entry must use a RELATIVE import (not a Windows absolute path).
+    expect(entry).toMatch(/import Page from '\.\.\/.+\/Home\.tsx';/);
+    expect(entry).not.toMatch(/import Page from '[A-Za-z]:\//);
     expect(entry).toContain('createRoot');
 
     const html = readFileSync(result.indexHtmlPath, 'utf8');
@@ -2294,6 +2328,12 @@ describe('generateEphemeralPreview', () => {
     expect(viteCfg).toContain(`alias: {`);
     expect(viteCfg).toContain(`'@'`);
     expect(viteCfg).toContain(`port: 5180`);
+    // Must embed EPHEMERAL_DIR as a string literal, NOT use __dirname (undefined in ESM).
+    expect(viteCfg).not.toContain(`__dirname`);
+    expect(viteCfg).toContain(`const EPHEMERAL_DIR =`);
+    expect(viteCfg).toContain(`server: {`);
+    expect(viteCfg).toContain(`fs: {`);
+    expect(viteCfg).toContain(`allow: [USER_ROOT, EPHEMERAL_DIR]`);
   });
 
   it('preserves user vite.config aliases by extending', async () => {
@@ -2345,11 +2385,13 @@ Expected: FAIL — module not found.
 
 `packages/adapters/vite/src/generate.ts`:
 ```ts
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { mkdir, writeFile, access } from 'node:fs/promises';
+import { join, resolve, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { buildEntryWrapper, buildFakerBindings } from '@visual-edit/mock-runtime';
 import type { AdapterInput, GenerateResult } from './types.js';
+
+const CANDIDATE_CSS = ['src/index.css', 'src/main.css', 'src/app.css', 'src/styles.css'];
 
 export async function generateEphemeralPreview(input: AdapterInput): Promise<GenerateResult> {
   const hash = createHash('sha256')
@@ -2361,18 +2403,30 @@ export async function generateEphemeralPreview(input: AdapterInput): Promise<Gen
   const ephemeralDir = resolve(input.info.root, '.visual-edit', `preview-${hash}`);
   await mkdir(ephemeralDir, { recursive: true });
 
-  // Write faker bindings
+  // Detect a global CSS file for Tailwind / user styles. Optional — entry import is conditional.
+  const userCssAbs = await findFirstExisting(input.info.root, CANDIDATE_CSS);
+
+  // All entry imports are computed RELATIVE to ephemeralDir so Vite's module
+  // resolver does not have to handle Windows absolute paths like `C:/...`.
+  const toRelPosix = (absPath: string): string => {
+    let r = relative(ephemeralDir, absPath).replace(/\\/g, '/');
+    if (!r.startsWith('.')) r = './' + r;
+    return r;
+  };
+
+  // Write faker bindings (sibling of entry)
   const fakerBindingsPath = join(ephemeralDir, 'faker-bindings.ts');
   await writeFile(fakerBindingsPath, buildFakerBindings(input.schemas), 'utf8');
 
-  // Write entry
+  // Write entry — ALL paths are relative to ephemeralDir
   const entryPath = join(ephemeralDir, 'entry.tsx');
   const entry = buildEntryWrapper({
-    pageImportPath: input.page.filePath.replace(/\\/g, '/'),
+    pageImportPath: toRelPosix(input.page.filePath),
     configImportPath: input.config
-      ? join(input.info.root, 'visual-edit.config.ts').replace(/\\/g, '/')
+      ? toRelPosix(join(input.info.root, 'visual-edit.config.ts'))
       : null,
     fakerBindingsImportPath: './faker-bindings.ts',
+    userCssImportPath: userCssAbs ? toRelPosix(userCssAbs) : null,
     sessionId: input.sessionId,
   });
   await writeFile(entryPath, entry, 'utf8');
@@ -2383,9 +2437,17 @@ export async function generateEphemeralPreview(input: AdapterInput): Promise<Gen
 
   // Write vite.config.ts
   const viteConfigPath = join(ephemeralDir, 'vite.config.ts');
-  await writeFile(viteConfigPath, renderViteConfig(input), 'utf8');
+  await writeFile(viteConfigPath, renderViteConfig(input, ephemeralDir), 'utf8');
 
   return { ephemeralDir, entryPath, viteConfigPath, indexHtmlPath };
+}
+
+async function findFirstExisting(root: string, relPaths: string[]): Promise<string | null> {
+  for (const rel of relPaths) {
+    const abs = join(root, rel);
+    try { await access(abs); return abs; } catch { /* keep searching */ }
+  }
+  return null;
 }
 
 function renderIndexHtml(sessionId: string): string {
@@ -2403,7 +2465,7 @@ function renderIndexHtml(sessionId: string): string {
 `;
 }
 
-function renderViteConfig(input: AdapterInput): string {
+function renderViteConfig(input: AdapterInput, ephemeralDir: string): string {
   const aliasEntries = Object.entries(input.info.tsconfigPaths)
     .map(([k, vs]) => {
       const cleanKey = k.replace(/\/\*$/, '');
@@ -2413,16 +2475,26 @@ function renderViteConfig(input: AdapterInput): string {
     .join('\n');
 
   const userRootJs = JSON.stringify(input.info.root.replace(/\\/g, '/'));
+  const ephemeralJs = JSON.stringify(ephemeralDir.replace(/\\/g, '/'));
+  const publicDirJs = input.info.publicDir
+    ? JSON.stringify(input.info.publicDir)
+    : 'false';
 
   return `import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'node:path';
 
 const USER_ROOT = ${userRootJs};
+const EPHEMERAL_DIR = ${ephemeralJs};
 
 export default defineConfig({
-  root: __dirname,
+  root: EPHEMERAL_DIR,
+  publicDir: ${publicDirJs === 'false' ? 'false' : `resolve(USER_ROOT, ${publicDirJs})`},
   plugins: [react()],
+  css: {
+    // PostCSS picks up the user's postcss.config.* automatically when scanning from USER_ROOT
+    postcss: USER_ROOT,
+  },
   resolve: {
     alias: {
 ${aliasEntries}
@@ -2432,6 +2504,10 @@ ${aliasEntries}
     port: ${input.port},
     strictPort: true,
     host: '127.0.0.1',
+    fs: {
+      // Allow Vite to serve files from the user's project root (outside ephemeralDir).
+      allow: [USER_ROOT, EPHEMERAL_DIR],
+    },
   },
   optimizeDeps: {
     include: ['react', 'react-dom/client'],
@@ -2487,30 +2563,47 @@ And devDependencies:
 
 Run `npm install` from root.
 
-- [ ] **Step 2: Write the failing test (smoke + cleanup)**
+- [ ] **Step 2: Write the failing test**
+
+We test the `Local:` URL extraction logic directly (it's the only piece of `spawn.ts` that has tricky behavior). Spawning real Vite is deferred to the e2e (Task 19) — too flaky/slow for unit tests.
+
+To make the regex testable, refactor `startVite` so its line-parsing helper is exported:
 
 `packages/adapters/vite/tests/spawn.test.ts`:
 ```ts
 import { describe, it, expect } from 'vitest';
-import { startVite } from '../src/spawn.js';
-import type { AdapterHandle } from '../src/types.js';
+import { extractLocalUrl, startVite } from '../src/spawn.js';
 
-describe('startVite (contract test)', () => {
-  it('returns a handle with url + stop()', () => {
-    // Contract-only test: we type-check the API. A real subprocess test runs in Task 20.
-    const handle: AdapterHandle = {
-      url: 'http://localhost:5180',
-      stop: async () => {},
-    };
-    expect(typeof handle.url).toBe('string');
-    expect(typeof handle.stop).toBe('function');
-    // Importing startVite proves it exports correctly:
+describe('extractLocalUrl', () => {
+  it('parses Vite 5 default Local: line', () => {
+    expect(extractLocalUrl('  Local:   http://localhost:5180/')).toBe('http://localhost:5180/');
+  });
+
+  it('parses Vite 5 line with arrow prefix', () => {
+    expect(extractLocalUrl('  ➜  Local:   http://localhost:5180/')).toBe('http://localhost:5180/');
+  });
+
+  it('parses 127.0.0.1 host (strictly bound)', () => {
+    expect(extractLocalUrl('  Local:   http://127.0.0.1:5181/')).toBe('http://127.0.0.1:5181/');
+  });
+
+  it('returns null for non-Local lines', () => {
+    expect(extractLocalUrl('  Network: use --host to expose')).toBeNull();
+    expect(extractLocalUrl('VITE v5.4.10 ready')).toBeNull();
+    expect(extractLocalUrl('')).toBeNull();
+  });
+
+  it('strips trailing ANSI reset / whitespace', () => {
+    expect(extractLocalUrl('  Local:   http://localhost:5180/   ')).toBe('http://localhost:5180/');
+  });
+});
+
+describe('startVite (export shape)', () => {
+  it('is exported as a function', () => {
     expect(typeof startVite).toBe('function');
   });
 });
 ```
-
-(We defer real-subprocess testing to Task 20 / e2e because spawning Vite in unit tests is flaky and slow.)
 
 - [ ] **Step 3: Run test (fails)**
 
@@ -2527,6 +2620,17 @@ Expected: FAIL — module not found.
 import spawn from 'cross-spawn';
 import type { ChildProcess } from 'node:child_process';
 import type { AdapterHandle, GenerateResult } from './types.js';
+
+/**
+ * Extract `http(s)://...` from a Vite "Local:" stdout line. Returns null if no match.
+ * Tolerates leading whitespace, the optional `➜` arrow prefix, and trailing whitespace.
+ * Exported for unit testing.
+ */
+export function extractLocalUrl(line: string): string | null {
+  const m = line.match(/Local:\s+(https?:\/\/[^\s]+)/);
+  if (!m) return null;
+  return m[1]!.trim();
+}
 
 export interface StartViteInput {
   generated: GenerateResult;
@@ -2557,11 +2661,10 @@ export function startVite(input: StartViteInput): { process: ChildProcess; handl
 
     const onLine = (line: string) => {
       input.onLog?.(line);
-      const m = line.match(/Local:\s+(https?:\/\/\S+)/);
-      if (m && !resolved) {
+      const url = extractLocalUrl(line);
+      if (url && !resolved) {
         resolved = true;
         clearTimeout(timeout);
-        const url = m[1]!;
         resolve({
           url,
           async stop() {
@@ -2602,7 +2705,7 @@ export function startVite(input: StartViteInput): { process: ChildProcess; handl
 `packages/adapters/vite/src/index.ts`:
 ```ts
 export { generateEphemeralPreview } from './generate.js';
-export { startVite, type StartViteInput } from './spawn.js';
+export { startVite, extractLocalUrl, type StartViteInput } from './spawn.js';
 export type { AdapterInput, AdapterHandle, GenerateResult } from './types.js';
 ```
 
@@ -2612,7 +2715,7 @@ export type { AdapterInput, AdapterHandle, GenerateResult } from './types.js';
 cd packages/adapters/vite && npm run build && npx vitest run
 ```
 
-Expected: 3 tests pass total (2 from generate, 1 from spawn).
+Expected: 8 tests pass total (2 from generate, 5 extractLocalUrl + 1 startVite shape from spawn).
 
 - [ ] **Step 7: Commit + push**
 
@@ -3113,11 +3216,12 @@ import type { AdapterInput } from '@visual-edit/adapter-vite';
 import type { IpcMessage } from '@visual-edit/protocol';
 import type { PreviewSession } from '@visual-edit/shared';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+// __dirname is not defined in ESM; derive from import.meta.url.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-/** Resolve to the preview-worker dist entry — installed as a workspace dep. */
+/** Resolve to the preview-worker dist entry. From packages/daemon/dist/ → packages/preview-worker/dist/index.js */
 function workerEntry(): string {
-  // From packages/daemon/dist back up to packages/preview-worker/dist/index.js
   return resolve(__dirname, '..', '..', 'preview-worker', 'dist', 'index.js');
 }
 
@@ -3137,35 +3241,56 @@ export class PreviewSupervisor {
 
     child.send({ kind: 'start', adapterInput: input });
 
-    return new Promise((resolveSession, rejectSession) => {
+    return new Promise<PreviewSession>((resolveSession, rejectSession) => {
+      let settled = false;
+      const settle = (fn: () => void) => { if (!settled) { settled = true; fn(); } };
+
       const timeout = setTimeout(() => {
-        child.kill('SIGTERM');
-        rejectSession(new Error(`worker did not become ready within 30s`));
+        settle(() => {
+          child.kill('SIGTERM');
+          rejectSession(new Error(`worker did not become ready within 30s`));
+        });
       }, 30_000);
 
       child.on('message', (raw: unknown) => {
         const msg = raw as IpcMessage;
         if (msg.kind === 'ready') {
-          clearTimeout(timeout);
-          const session: PreviewSession = {
-            id: sessionId,
-            url: msg.url,
-            pageRef: input.page,
-            startedAt: new Date().toISOString(),
-            status: 'ready',
-          };
-          this.sessions.set(sessionId, { session, child });
-          resolveSession(session);
+          settle(() => {
+            clearTimeout(timeout);
+            const session: PreviewSession = {
+              id: sessionId,
+              url: msg.url,
+              pageRef: input.page,
+              startedAt: new Date().toISOString(),
+              status: 'ready',
+            };
+            this.sessions.set(sessionId, { session, child });
+            resolveSession(session);
+          });
         } else if (msg.kind === 'error') {
-          clearTimeout(timeout);
-          rejectSession(new Error(`worker error: ${msg.message}`));
+          settle(() => {
+            clearTimeout(timeout);
+            rejectSession(new Error(`worker error: ${msg.message}`));
+          });
         }
       });
 
       child.on('exit', (code) => {
-        clearTimeout(timeout);
+        // If exit happens BEFORE 'ready', reject — the caller never got a session.
+        // If exit happens AFTER 'ready', mark the existing session crashed.
+        settle(() => {
+          clearTimeout(timeout);
+          rejectSession(new Error(`worker exited with code ${code} before becoming ready`));
+        });
         const existing = this.sessions.get(sessionId);
         if (existing) existing.session.status = 'crashed';
+      });
+
+      child.on('error', (err) => {
+        settle(() => {
+          clearTimeout(timeout);
+          rejectSession(err);
+        });
       });
     });
   }
@@ -3247,7 +3372,7 @@ async function readJsonBody(req: NodeJS.ReadableStream): Promise<unknown> {
 }
 ```
 
-- [ ] **Step 3: Implement ws.ts**
+- [ ] **Step 3: Implement ws.ts (skeleton — no consumer in 1.A, but the contract is pinned for 1.B)**
 
 `packages/daemon/src/ws.ts`:
 ```ts
@@ -3260,6 +3385,11 @@ export interface WsHandlers {
   getSession: (sessionId: string) => PreviewSession | null;
 }
 
+/**
+ * Attach a WebSocket server to the daemon HTTP server. Currently has no in-tree consumer
+ * (editor-ui is deferred to Phase 1.B), but the snapshot contract is wired so 1.B can
+ * consume it without refactoring the daemon.
+ */
 export function attachWebSocket(http: Server, handlers: WsHandlers): WebSocketServer {
   const wss = new WebSocketServer({ server: http, path: '/ws' });
   wss.on('connection', (socket: WebSocket) => {
@@ -3323,6 +3453,9 @@ export class Daemon {
     this.logger = opts.logger ?? new Logger();
   }
 
+  /** Resolved port the daemon is actually listening on. Undefined before start(). */
+  getPort(): number | undefined { return this.actualPort; }
+
   async start(): Promise<void> {
     const existing = await readLock(this.opts.root);
     if (existing && isProcessAlive(existing.pid)) {
@@ -3369,8 +3502,17 @@ export class Daemon {
 
   async stop(): Promise<void> {
     await this.supervisor.stopAll();
-    if (this.wsServer) await new Promise<void>((r) => this.wsServer!.close(() => r()));
-    if (this.httpServer) await new Promise<void>((r) => this.httpServer!.close(() => r()));
+    if (this.wsServer) {
+      // Force-close all open WS connections so close() resolves.
+      for (const client of this.wsServer.clients) client.terminate();
+      await new Promise<void>((r) => this.wsServer!.close(() => r()));
+    }
+    if (this.httpServer) {
+      // Available since Node 18.2 — required because keep-alive HTTP connections
+      // (e.g. from the mcp-server's fetch) prevent close() from resolving otherwise.
+      this.httpServer.closeAllConnections();
+      await new Promise<void>((r) => this.httpServer!.close(() => r()));
+    }
     await removeLock(this.opts.root);
     this.logger.info('daemon stopped');
   }
@@ -3482,7 +3624,7 @@ export { attachWebSocket } from './ws.js';
 import { describe, it, expect } from 'vitest';
 import { createHttpServer } from '../src/http.js';
 
-// Real daemon spawn-and-test is in Task 20 (e2e). Here we just test the http handler wiring.
+// Real daemon spawn-and-test is in Task 19 (e2e). Here we just test the http handler wiring.
 describe('http handlers (unit)', () => {
   it('wires open/close/status endpoints', async () => {
     let opened = false;
@@ -3560,6 +3702,7 @@ git push origin main
   },
   "dependencies": {
     "@visual-edit/protocol": "*",
+    "@visual-edit/daemon": "*",
     "@modelcontextprotocol/sdk": "1.0.4"
   }
 }
@@ -3574,9 +3717,14 @@ git push origin main
     "rootDir": "src"
   },
   "include": ["src/**/*"],
-  "references": [{ "path": "../protocol" }]
+  "references": [
+    { "path": "../protocol" },
+    { "path": "../daemon" }
+  ]
 }
 ```
+
+(`@visual-edit/daemon` is imported only for `readLock` — the lockfile reader. We do NOT spawn the daemon from the MCP server in 1.A.)
 
 Run `npm install` from root.
 
@@ -3742,21 +3890,55 @@ export function registerTools(server: Server, daemonUrl: string): void {
 
 - [ ] **Step 6: Implement cli.ts (the stdio entrypoint)**
 
+The CLI accepts `--root <path>` (or defaults to `cwd`). It reads `.visual-edit/daemon.lock` to discover the actual daemon port (which is dynamic, picked from `findFreePort(5170, 5179)`). If no lockfile or the recorded PID is dead, it returns a clear error rather than silently failing on `ECONNREFUSED`.
+
 `packages/mcp-server/src/cli.ts`:
 ```ts
 #!/usr/bin/env node
+import { resolve } from 'node:path';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { readLock } from '@visual-edit/daemon';
 import { registerTools } from './tools.js';
 
-const DAEMON_URL = process.env.VE_DAEMON_URL ?? 'http://127.0.0.1:5170';
+function parseRoot(argv: string[]): string {
+  const i = argv.indexOf('--root');
+  return i >= 0 ? resolve(argv[i + 1] ?? '.') : process.cwd();
+}
+
+function isProcessAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
+async function discoverDaemonUrl(root: string): Promise<string> {
+  // Allow override (e.g. for tests or remote daemons).
+  const override = process.env.VE_DAEMON_URL;
+  if (override) return override;
+
+  const lock = await readLock(root);
+  if (!lock) {
+    throw new Error(
+      `daemon not running for root '${root}'. Start it with:\n` +
+      `  node packages/daemon/dist/cli.js start --root ${root}`,
+    );
+  }
+  if (!isProcessAlive(lock.pid)) {
+    throw new Error(
+      `stale daemon lock found (pid ${lock.pid} not alive). Remove ${root}/.visual-edit/daemon.lock and restart.`,
+    );
+  }
+  return `http://127.0.0.1:${lock.port}`;
+}
 
 async function main(): Promise<void> {
+  const root = parseRoot(process.argv.slice(2));
+  const daemonUrl = await discoverDaemonUrl(root);
+
   const server = new Server(
     { name: 'visual-edit-mcp-server', version: '0.0.0' },
     { capabilities: { tools: {} } },
   );
-  registerTools(server, DAEMON_URL);
+  registerTools(server, daemonUrl);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
@@ -3793,270 +3975,16 @@ git push origin main
 
 ---
 
-### Task 17: editor-ui (minimal — iframe + WS hello/snapshot)
-
-**Files:**
-- Create: `packages/editor-ui/package.json`
-- Create: `packages/editor-ui/tsconfig.json`
-- Create: `packages/editor-ui/vite.config.ts`
-- Create: `packages/editor-ui/index.html`
-- Create: `packages/editor-ui/src/main.tsx`
-- Create: `packages/editor-ui/src/App.tsx`
-- Create: `packages/editor-ui/src/ws-client.ts`
-- Create: `packages/editor-ui/src/state.ts`
-- Create: `packages/editor-ui/tests/ws-client.test.ts`
-
-- [ ] **Step 1: Package skeleton**
-
-`packages/editor-ui/package.json`:
-```json
-{
-  "name": "@visual-edit/editor-ui",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "build": "vite build",
-    "dev": "vite",
-    "test": "vitest run"
-  },
-  "dependencies": {
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "zustand": "4.5.5",
-    "@visual-edit/protocol": "*"
-  },
-  "devDependencies": {
-    "@types/react": "18.3.12",
-    "@types/react-dom": "18.3.1",
-    "@vitejs/plugin-react": "4.3.3",
-    "vite": "5.4.10",
-    "jsdom": "25.0.1",
-    "@testing-library/react": "16.0.1"
-  }
-}
-```
-
-`packages/editor-ui/tsconfig.json`:
-```json
-{
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src",
-    "jsx": "react-jsx",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["node", "vite/client"],
-    "composite": false,
-    "noEmit": true
-  },
-  "include": ["src/**/*"]
-}
-```
-
-`packages/editor-ui/vite.config.ts`:
-```ts
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-
-export default defineConfig({
-  plugins: [react()],
-  server: { port: 5173 },
-  test: {
-    environment: 'jsdom',
-  },
-});
-```
-
-`packages/editor-ui/index.html`:
-```html
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Visual Edit Editor</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
-```
-
-Run `npm install` from root.
-
-- [ ] **Step 2: Write the failing test (ws-client unit)**
-
-`packages/editor-ui/tests/ws-client.test.ts`:
-```ts
-import { describe, it, expect, vi } from 'vitest';
-import { connectEditorWs } from '../src/ws-client.js';
-
-describe('connectEditorWs', () => {
-  it('sends a WsHelloMessage with version 1.0 and sessionId', () => {
-    const sent: string[] = [];
-    const fakeSocket: any = {
-      readyState: 1, // WebSocket.OPEN
-      send: (s: string) => sent.push(s),
-      close: () => {},
-      addEventListener: () => {},
-    };
-    const factory = vi.fn(() => fakeSocket);
-    connectEditorWs({ wsUrl: 'ws://x/ws', sessionId: 'abc', onSnapshot: () => {}, factory });
-    // ws-client should send hello on connect
-    expect(sent).toHaveLength(1);
-    const parsed = JSON.parse(sent[0]!);
-    expect(parsed.kind).toBe('hello');
-    expect(parsed.version).toBe('1.0');
-    expect(parsed.sessionId).toBe('abc');
-  });
-});
-```
-
-- [ ] **Step 3: Run test (fails)**
-
-```bash
-cd packages/editor-ui && npx vitest run
-```
-
-Expected: FAIL — module not found.
-
-- [ ] **Step 4: Implement ws-client.ts**
-
-`packages/editor-ui/src/ws-client.ts`:
-```ts
-import { PROTOCOL_VERSION, type WsSnapshotMessage } from '@visual-edit/protocol';
-
-export interface ConnectInput {
-  wsUrl: string;
-  sessionId: string;
-  onSnapshot: (msg: WsSnapshotMessage) => void;
-  /** Factory for tests; defaults to global WebSocket */
-  factory?: (url: string) => WebSocket;
-}
-
-export function connectEditorWs(input: ConnectInput): { close: () => void } {
-  const factory = input.factory ?? ((url) => new WebSocket(url));
-  const socket = factory(input.wsUrl);
-
-  const sendHello = () => socket.send(JSON.stringify({
-    kind: 'hello',
-    version: PROTOCOL_VERSION,
-    sessionId: input.sessionId,
-  }));
-
-  if (socket.readyState === 1) {
-    sendHello();
-  } else {
-    socket.addEventListener('open', sendHello);
-  }
-
-  socket.addEventListener('message', (ev: MessageEvent) => {
-    try {
-      const parsed = JSON.parse(typeof ev.data === 'string' ? ev.data : ev.data.toString());
-      if (parsed && parsed.kind === 'snapshot') {
-        input.onSnapshot(parsed as WsSnapshotMessage);
-      }
-    } catch {
-      // ignore
-    }
-  });
-
-  return { close: () => socket.close() };
-}
-```
-
-- [ ] **Step 5: Implement state.ts**
-
-`packages/editor-ui/src/state.ts`:
-```ts
-import { create } from 'zustand';
-
-export interface EditorState {
-  sessionId: string | null;
-  previewUrl: string | null;
-  status: 'connecting' | 'ready' | 'crashed' | 'closed';
-  setSnapshot(s: { sessionId: string; previewUrl: string; status: EditorState['status'] }): void;
-}
-
-export const useEditor = create<EditorState>((set) => ({
-  sessionId: null,
-  previewUrl: null,
-  status: 'connecting',
-  setSnapshot: (s) => set({ sessionId: s.sessionId, previewUrl: s.previewUrl, status: s.status }),
-}));
-```
-
-- [ ] **Step 6: Implement App.tsx**
-
-`packages/editor-ui/src/App.tsx`:
-```tsx
-import { useEffect } from 'react';
-import { useEditor } from './state.js';
-import { connectEditorWs } from './ws-client.js';
-
-export function App() {
-  const { sessionId, previewUrl, status, setSnapshot } = useEditor();
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get('session');
-    if (!id) return;
-    const conn = connectEditorWs({
-      wsUrl: `ws://${window.location.host}/ws`,
-      sessionId: id,
-      onSnapshot: (snap) => setSnapshot({
-        sessionId: snap.sessionId,
-        previewUrl: snap.url,
-        status: snap.status === 'ready' ? 'ready' : snap.status === 'crashed' ? 'crashed' : 'closed',
-      }),
-    });
-    return () => conn.close();
-  }, [setSnapshot]);
-
-  if (!sessionId) return <div style={{ padding: 16 }}>Missing ?session=… in URL.</div>;
-  if (status === 'connecting') return <div style={{ padding: 16 }}>Connecting to session {sessionId}…</div>;
-  if (status === 'crashed') return <div style={{ padding: 16, color: 'red' }}>Preview crashed.</div>;
-  if (status === 'closed') return <div style={{ padding: 16 }}>Preview closed.</div>;
-  return (
-    <iframe
-      src={previewUrl ?? ''}
-      style={{ width: '100vw', height: '100vh', border: 0 }}
-      title={`preview-${sessionId}`}
-    />
-  );
-}
-```
-
-- [ ] **Step 7: Implement main.tsx**
-
-`packages/editor-ui/src/main.tsx`:
-```tsx
-import { createRoot } from 'react-dom/client';
-import { App } from './App.js';
-
-createRoot(document.getElementById('root')!).render(<App />);
-```
-
-- [ ] **Step 8: Build + test**
-
-```bash
-cd packages/editor-ui && npx vitest run && npm run build
-```
-
-Expected: 1 test passes; vite build succeeds (creates dist/).
-
-- [ ] **Step 9: Commit + push**
-
-```bash
-git add packages/editor-ui/ package-lock.json
-git commit -m "feat(editor-ui): minimal iframe wrapper with WS hello/snapshot"
-git push origin main
-```
+> **Note: an earlier draft had Task 17 = editor-ui (minimal iframe wrapper).** It was dropped during plan review:
+> - 1.A acceptance is "user opens the synthetic Vite URL directly", so an empty iframe wrapper had no visible value yet
+> - It would have introduced routing complexity (3 ports: daemon / editor-ui / synthetic-preview, WebSocket proxying)
+> - The WebSocket contract is still pinned in `packages/daemon/src/ws.ts` (Task 15) so 1.B can consume it without daemon changes
+>
+> The remaining tasks 17-20 below were originally numbered 18-21.
 
 ---
 
-### Task 18: apps/claude-plugin
+### Task 17: apps/claude-plugin
 
 **Files:**
 - Create: `apps/claude-plugin/plugin.json`
@@ -4085,14 +4013,21 @@ git push origin main
   "mcpServers": {
     "visual-edit": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/../../packages/mcp-server/dist/cli.js"],
+      "args": ["${VE_MCP_SERVER_PATH}", "--root", "${VE_PROJECT_ROOT}"],
       "env": {}
     }
   }
 }
 ```
 
-(Note: this path resolution is local-development-friendly. For npm-published distribution we'll switch to `npx visual-edit-mcp-server` in Phase 1.C.)
+For 1.A local development, the user must set two env vars before launching Claude Code (e.g. in their shell profile or via a wrapper script):
+
+```
+export VE_MCP_SERVER_PATH=/abs/path/to/visual-edit-plugin/packages/mcp-server/dist/cli.js
+export VE_PROJECT_ROOT=/abs/path/to/the/project/being/edited
+```
+
+(`${CLAUDE_PLUGIN_ROOT}/../../...` is unreliable because it depends on the plugin install layout. Using explicit env vars makes the dependency obvious. Phase 1.C will switch to `npx visual-edit-mcp-server` once we publish to npm.)
 
 - [ ] **Step 3: /visual command**
 
@@ -4108,14 +4043,14 @@ You are about to open the page `$ARGUMENTS` in the visual editor.
 Steps:
 1. Resolve the absolute path of the current project root (use `pwd` if needed).
 2. Call the MCP tool `open_page` with `{ root: <pwd>, page: "$ARGUMENTS" }`.
-3. The tool returns `{ url, sessionId }`. Show the URL to the user — they should open it in their browser to see the rendered page.
+3. The tool returns `{ url, sessionId }`. Show the URL to the user — they should open it directly in their browser to see the rendered page. **In Phase 1.A there is no editor-ui yet — the URL points straight at the synthetic Vite preview.**
 4. If the user asks to close, call `close_preview` with the same `sessionId`.
 
-If the daemon is not running, the tool will fail. Tell the user to run:
+If the tool fails with "daemon not running", tell the user to run in a separate terminal:
 ```
 node packages/daemon/dist/cli.js start --root .
 ```
-in a separate terminal, then retry.
+Then retry. The MCP server discovers the daemon's actual port by reading `.visual-edit/daemon.lock` — no fixed port assumption.
 ```
 
 - [ ] **Step 4: using-visual-edit skill**
@@ -4154,8 +4089,10 @@ export default config;
 
 ## Limitations (Phase 1.A)
 - No editing yet — this is preview-only. Editing arrives in Phase 1.B.
+- No editor-ui (iframe wrapper / overlay) — URL is the synthetic Vite preview directly. Editor-ui arrives in Phase 1.B.
 - No CSS Modules / styled-components beyond what Vite handles natively.
-- No real backend — all `fetch`/SDK calls fall through (no MSW yet).
+- No real backend — all `fetch`/SDK calls fall through (no MSW yet); Zod schemas surface as faker-derived globals on `window.__VE_MOCKS`.
+- Daemon must be started manually before MCP tool calls work.
 ```
 
 - [ ] **Step 5: README**
@@ -4194,7 +4131,7 @@ git push origin main
 
 ---
 
-### Task 19: examples/basic-vite seed project
+### Task 18: examples/basic-vite seed project
 
 **Files:**
 - Create: `examples/basic-vite/package.json`
@@ -4432,7 +4369,7 @@ git push origin main
 
 ---
 
-### Task 20: End-to-end smoke + acceptance gate
+### Task 19: End-to-end smoke + acceptance gate
 
 **Files:**
 - Create: `tests/e2e/render-isolated-page.test.ts` (root-level e2e)
@@ -4454,6 +4391,7 @@ Add `tests/e2e/*` to root `package.json`'s workspaces:
   "private": true,
   "type": "module",
   "scripts": {
+    "pretest": "playwright install --with-deps chromium",
     "test": "vitest run --config vitest.config.ts"
   },
   "devDependencies": {
@@ -4465,6 +4403,8 @@ Add `tests/e2e/*` to root `package.json`'s workspaces:
   }
 }
 ```
+
+(`pretest` runs `playwright install` automatically, ensuring Chromium is downloaded before the test executes. CI must have network access for this to succeed on a fresh runner.)
 
 `tests/e2e/vitest.config.ts`:
 ```ts
@@ -4485,18 +4425,26 @@ Run `npm install` from root; then `cd tests/e2e && npx playwright install chromi
 `tests/e2e/render-isolated-page.test.ts`:
 ```ts
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Daemon } from '@visual-edit/daemon';
-import { chromium, type Browser, type Page } from 'playwright';
+import { chromium, type Browser } from 'playwright';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '../../examples/basic-vite');
 
 let daemon: Daemon;
+let daemonUrl: string;
 let browser: Browser;
 
 beforeAll(async () => {
-  daemon = new Daemon({ root: ROOT, port: 5170 });
+  // No explicit port — let findFreePort pick one in 5170-5179. The test reads
+  // back the actual port via daemon.getPort() to avoid colliding with running services.
+  daemon = new Daemon({ root: ROOT });
   await daemon.start();
+  const port = daemon.getPort();
+  if (!port) throw new Error('daemon did not bind a port');
+  daemonUrl = `http://127.0.0.1:${port}`;
   browser = await chromium.launch();
 }, 60_000);
 
@@ -4507,8 +4455,7 @@ afterAll(async () => {
 
 describe('Phase 1.A acceptance: render isolated page', () => {
   it('opens Home.tsx, renders with config.wrapPage + faker-derived mocks', async () => {
-    // Open the preview via daemon HTTP
-    const resp = await fetch('http://127.0.0.1:5170/preview', {
+    const resp = await fetch(`${daemonUrl}/preview`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: ROOT, page: 'src/pages/Home.tsx' }),
@@ -4518,14 +4465,18 @@ describe('Phase 1.A acceptance: render isolated page', () => {
     expect(url).toMatch(/^http:\/\/127\.0\.0\.1:51\d\d/);
     expect(sessionId).toMatch(/^[0-9a-f]{8}$/);
 
-    // Visit the URL with Playwright
     const page = await browser.newPage();
     const consoleErrors: string[] = [];
     page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
 
     await page.goto(url, { waitUntil: 'networkidle', timeout: 60_000 });
 
-    // The page should render the H1 with "Hello <name>" — wait up to 10s for it.
+    // Confirm the mock pipeline delivered bindings to the page (proves discoverSchemas →
+    // buildFakerBindings → entry → globalThis chain works end-to-end, not just visually).
+    const mockType = await page.evaluate(() => typeof (window as { __VE_MOCKS?: { makeUser?: unknown } }).__VE_MOCKS?.makeUser);
+    expect(mockType).toBe('function');
+
+    // The page should render the H1 with "Hello <name>"
     await page.waitForSelector('h1', { timeout: 10_000 });
     const h1 = await page.textContent('h1');
     expect(h1).toMatch(/^Hello /);
@@ -4534,11 +4485,15 @@ describe('Phase 1.A acceptance: render isolated page', () => {
     const emailText = await page.textContent('p');
     expect(emailText).toMatch(/@/);
 
+    // Tailwind class actually applied (non-default padding) — sanity check that index.css imported.
+    const mainPadding = await page.evaluate(() => getComputedStyle(document.querySelector('main')!).padding);
+    expect(mainPadding).not.toBe('0px');
+
     // Console must be clean (no errors)
     expect(consoleErrors).toEqual([]);
 
     // Cleanup: close preview
-    const closeResp = await fetch('http://127.0.0.1:5170/close', {
+    const closeResp = await fetch(`${daemonUrl}/close`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId }),
@@ -4548,7 +4503,7 @@ describe('Phase 1.A acceptance: render isolated page', () => {
   });
 
   it('rejects unknown route with VE_PROJECT_002', async () => {
-    const resp = await fetch('http://127.0.0.1:5170/preview', {
+    const resp = await fetch(`${daemonUrl}/preview`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: ROOT, page: 'src/pages/Nonexistent.tsx' }),
@@ -4559,6 +4514,8 @@ describe('Phase 1.A acceptance: render isolated page', () => {
   });
 });
 ```
+
+**Prerequisite reminder:** before running this test, ensure `npm install` ran at the repo root (so workspace deps + `examples/basic-vite/node_modules/@tanstack/react-query` are hoisted/installed). The `pretest` script handles Playwright; root install is the developer's responsibility.
 
 - [ ] **Step 3: Run the e2e test**
 
@@ -4585,7 +4542,7 @@ git push origin main
 
 ---
 
-### Task 21: Mark Phase 1.A complete
+### Task 20: Mark Phase 1.A complete
 
 **Files:**
 - Modify: `docs/superpowers/specs/2026-05-09-visual-edit-plugin-design.md` (last section)
@@ -4662,26 +4619,27 @@ git push origin main
 
 - [ ] Every step has complete code (no "implement the X" without showing how)
 - [ ] All file paths are exact and consistent across tasks (e.g. `packages/adapters/vite/` not `packages/vite-adapter/`)
-- [ ] Type names match across tasks: `ProjectInfo`, `PageEntry`, `VisualEditConfig`, `MockSchema`, `AdapterInput`, `AdapterHandle`, `OpenPreviewRequest`, `PROTOCOL_VERSION`, `Daemon`, `PreviewSupervisor`, `DaemonClient`
+- [ ] Type names match across tasks: `ProjectInfo`, `PageEntry`, `VisualEditConfig`, `MockSchema`, `AdapterInput`, `AdapterHandle`, `OpenPreviewRequest`, `PROTOCOL_VERSION`, `Daemon`, `PreviewSupervisor`, `DaemonClient`, `extractLocalUrl`, `BuildEntryWrapperInput.userCssImportPath`, `Daemon.getPort()`
 - [ ] Each task ends with a commit + push
-- [ ] No "TBD", "TODO", "fill in" placeholders (Task 21 has FILL IN markers but those are runtime data — not plan placeholders)
+- [ ] No "TBD", "TODO", "fill in" placeholders (Task 20 has FILL IN markers but those are runtime data — not plan placeholders)
 - [ ] Spec coverage:
   - §2.1 shared types → Task 2
   - §2.2 protocol Zod schemas → Task 3
   - §2.3 diagnostics → Task 4
-  - §2.4 project-analyzer → Tasks 5-8 (analyze, loadConfig, findRoutes, discoverSchemas — sandbox in loadConfig)
+  - §2.4 project-analyzer → Tasks 5-8 (analyze, loadConfig, findRoutes, discoverSchemas — sandbox in loadConfig is best-effort, see header constraints)
   - §2.5 mock-runtime → Tasks 9-10 (entryWrapper, fakerBindings — buildMSWHandlers deferred to 1.C)
   - §2.6 code-mods → DEFERRED to Phase 1.B
-  - §2.7 asset-proxy → DEFERRED (placeholder fallback inside vite.config for now)
-  - §2.8 adapters/vite → Tasks 11-12 (generate, spawn)
+  - §2.7 asset-proxy → DEFERRED; basic publicDir wiring done in Task 11
+  - §2.8 adapters/vite → Tasks 11-12 (generate with relative imports + ephemeralDir literal + CSS detection + publicDir + fs.allow; spawn with extractLocalUrl helper)
   - §2.9 preview-worker → Task 13
-  - §2.10 daemon → Tasks 14-15 (lockFile, portFinder, supervisor, http, ws, daemon class, cli)
-  - §2.11 editor-ui → Task 17 (minimal — overlay deferred)
-  - §2.12 mcp-server → Task 16 (open_page, close_preview, get_status — drain_ask_ai deferred)
-  - §2.13 apps/claude-plugin → Task 18
-  - §3.1 open page flow → exercised by Tasks 15 (daemon orchestration) + 20 (e2e)
+  - §2.10 daemon → Tasks 14-15 (lockFile, portFinder, supervisor with reject-on-exit, http, ws skeleton, daemon class with getPort + closeAllConnections, cli)
+  - §2.11 editor-ui → DROPPED from 1.A (see "Sequencing" note); deferred to Phase 1.B
+  - §2.12 mcp-server → Task 16 (open_page, close_preview, get_status; reads daemon port from lockfile)
+  - §2.13 apps/claude-plugin → Task 17 (.mcp.json uses VE_MCP_SERVER_PATH + VE_PROJECT_ROOT env vars)
+  - §3.1 open page flow → exercised by Tasks 15 (daemon orchestration) + 19 (e2e)
   - §6.2 Phase 1 acceptance ("100 random edits pass invariants") → DEFERRED to Phase 1.B (1.A doesn't edit)
-- [ ] Phase 1.A acceptance gate (Task 20) is explicit and measurable
+- [ ] Phase 1.A acceptance gate (Task 19) is explicit and measurable
+- [ ] Documented constraints in header acknowledge: jiti-sandbox limitation, manual daemon startup, npm install prerequisite, playwright install prerequisite, no HMR validation
 
 ---
 
