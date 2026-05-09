@@ -68,19 +68,26 @@ function summarize(
   let className: string | null = null;
   let style: string | null = null;
   const otherAttrs = new Map<string, string | null>();
+  // Nested JSX nodes that appear inside attribute initializers (e.g. `icons={{ ok: <Icon /> }}`)
+  // are summarized as extra children so their edits are checked for equivalence — and so they
+  // are stripped from the parent attr's text comparison (which would otherwise differ).
+  const nestedFromAttrs: JsxNodeSummary[] = [];
 
   for (const attr of opening.attributes.properties) {
     if (!ts.isJsxAttribute(attr)) {
-      // JsxSpreadAttribute: track its raw text under a special key.
-      otherAttrs.set(`...spread@${otherAttrs.size}`, attr.getText(sf));
+      // JsxSpreadAttribute: track normalized text (with nested JSX stripped) under a special key.
+      const spreadText = serializeNodeStrippingNestedJsx(attr, sf, nestedFromAttrs);
+      otherAttrs.set(`...spread@${otherAttrs.size}`, spreadText);
       continue;
     }
     const name = attr.name.getText(sf);
-    const valueText = attr.initializer ? attr.initializer.getText(sf) : null;
     if (name === 'data-vid' && attr.initializer && ts.isStringLiteral(attr.initializer)) {
       vid = attr.initializer.text;
       continue;
     }
+    const valueText = attr.initializer
+      ? serializeNodeStrippingNestedJsx(attr.initializer, sf, nestedFromAttrs)
+      : null;
     if (name === 'className') {
       className = valueText;
       continue;
@@ -94,7 +101,49 @@ function summarize(
   }
 
   const children = ts.isJsxElement(node) ? collectJsxChildren(node.children, sf) : [];
+  // Append nested-from-attr JSX after element children so indices are deterministic.
+  children.push(...nestedFromAttrs);
   return { vid, tagName, otherAttrs, className, style, children };
+}
+
+/**
+ * Return the source text of `node` with any nested JSX subtrees replaced by a placeholder,
+ * and push summaries of those nested JSX subtrees into `out` so they get equivalence-checked.
+ *
+ * This is necessary because attribute values can contain JSX (e.g. `icons={{ ok: <Icon /> }}`),
+ * and an edit applied to a nested JSX would otherwise show up as a "change to the parent's
+ * unrelated attribute text" false positive.
+ */
+function serializeNodeStrippingNestedJsx(
+  node: ts.Node,
+  sf: ts.SourceFile,
+  out: JsxNodeSummary[],
+): string {
+  // Find top-level JSX subtrees inside `node` (not descending past one once found).
+  const jsxRanges: { start: number; end: number }[] = [];
+  const findJsx = (n: ts.Node): void => {
+    if (n !== node && (ts.isJsxElement(n) || ts.isJsxSelfClosingElement(n) || ts.isJsxFragment(n))) {
+      jsxRanges.push({ start: n.getStart(sf), end: n.getEnd() });
+      out.push(summarize(n, sf));
+      return; // do not descend; summarize() handles recursion
+    }
+    ts.forEachChild(n, findJsx);
+  };
+  findJsx(node);
+  if (jsxRanges.length === 0) return node.getText(sf);
+  // Replace each nested JSX range with a placeholder in the node's text.
+  const nodeStart = node.getStart(sf);
+  const nodeEnd = node.getEnd();
+  const text = sf.text.slice(nodeStart, nodeEnd);
+  // Sort ranges descending so earlier offsets stay valid.
+  const sorted = [...jsxRanges].sort((a, b) => b.start - a.start);
+  let result = text;
+  for (const r of sorted) {
+    const localStart = r.start - nodeStart;
+    const localEnd = r.end - nodeStart;
+    result = result.slice(0, localStart) + '<__JSX__/>' + result.slice(localEnd);
+  }
+  return result;
 }
 
 function collectJsxChildren(children: ts.NodeArray<ts.JsxChild>, sf: ts.SourceFile): JsxNodeSummary[] {
