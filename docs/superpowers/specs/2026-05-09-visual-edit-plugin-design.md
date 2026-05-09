@@ -1029,5 +1029,7 @@ Migration scripts are NOT included in the package (avoid silent state mutation).
 
 ## Approval status
 
-- [ ] User reviewed this spec
-- [ ] User approved to proceed to implementation plan (writing-plans skill)
+- [x] User reviewed this spec
+- [x] User approved to proceed to implementation plan (writing-plans skill)
+- [x] Phase 0 spike plan written: docs/superpowers/plans/2026-05-09-phase-0-spike.md
+- [x] Phase 0 spike executed (GO/NO-GO recorded in docs/superpowers/specs/2026-05-09-spike-results.md)
