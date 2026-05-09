@@ -1,0 +1,27 @@
+{
+  "name": "visual-edit-spike",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.0.0" },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:fixtures": "vitest run tests/fixtures.test.ts",
+    "test:property": "vitest run tests/property.test.ts",
+    "test:oss": "vitest run tests/oss.test.ts",
+    "clone-oss": "tsx scripts/clone-oss.ts",
+    "report": "tsx scripts/report.ts",
+    "spike:full": "npm run clone-oss && npm test && npm run report"
+  },
+  "dependencies": {
+    "typescript": "5.6.3",
+    "fast-glob": "3.3.2"
+  },
+  "devDependencies": {
+    "vitest": "2.1.4",
+    "fast-check": "3.23.1",
+    "tsx": "4.19.2",
+    "@types/node": "22.9.0"
+  }
+}
