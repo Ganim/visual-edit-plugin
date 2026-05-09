@@ -4,8 +4,8 @@ spike/coverage/
 **/*.log
 .DS_Store
 packages/*/dist/
-packages/*/.tsbuildinfo
+packages/*/*.tsbuildinfo
 packages/adapters/*/dist/
-packages/adapters/*/.tsbuildinfo
+packages/adapters/*/*.tsbuildinfo
 apps/*/dist/
 .visual-edit/
