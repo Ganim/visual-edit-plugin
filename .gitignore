@@ -8,4 +8,5 @@ packages/*/*.tsbuildinfo
 packages/adapters/*/dist/
 packages/adapters/*/*.tsbuildinfo
 apps/*/dist/
+examples/*/dist/
 .visual-edit/
