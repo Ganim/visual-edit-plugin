@@ -1,0 +1,6 @@
+{
+  "name": "visual-edit",
+  "version": "0.0.0",
+  "description": "Render React pages in isolation with mocked data — no boot, no auth, no backend.",
+  "author": "Guilherme Ganim"
+}

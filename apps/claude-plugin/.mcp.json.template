@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "visual-edit": {
+      "command": "node",
+      "args": ["__MCP_SERVER_CLI__", "--root", "__PROJECT_ROOT__"],
+      "env": {}
+    }
+  }
+}
