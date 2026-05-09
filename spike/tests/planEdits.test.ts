@@ -41,3 +41,40 @@ describe('planEdits — className', () => {
     expect(patches[0]!.end).toBe(entry.attrsInsertPos);
   });
 });
+
+describe('planEdits — style', () => {
+  it('replaces existing style={{...}} expression entirely', () => {
+    const src = `const x = <div style={{ color: 'red' }} />;`;
+    const { instrumented, sourceMap } = instrument(src, 'a.tsx');
+    const vid = Object.keys(sourceMap)[0]!;
+    const patches = planEdits(instrumented, sourceMap, [
+      { kind: 'style', element: vid, newObjectText: "{ color: 'blue', padding: 4 }" },
+    ]);
+    expect(patches).toHaveLength(1);
+    const patch = patches[0]!;
+    expect(instrumented.slice(patch.start, patch.end)).toBe(`style={{ color: 'red' }}`);
+    expect(patch.replacement).toBe(`style={{ color: 'blue', padding: 4 }}`);
+  });
+
+  it('adds style attr when absent', () => {
+    const src = `const x = <div className="foo" />;`;
+    const { instrumented, sourceMap } = instrument(src, 'a.tsx');
+    const vid = Object.keys(sourceMap)[0]!;
+    const patches = planEdits(instrumented, sourceMap, [
+      { kind: 'style', element: vid, newObjectText: "{ color: 'blue' }" },
+    ]);
+    expect(patches).toHaveLength(1);
+    expect(patches[0]!.replacement).toBe(` style={{ color: 'blue' }}`);
+  });
+
+  it('plans both className and style edits in one call', () => {
+    const src = `const x = <div />;`;
+    const { instrumented, sourceMap } = instrument(src, 'a.tsx');
+    const vid = Object.keys(sourceMap)[0]!;
+    const patches = planEdits(instrumented, sourceMap, [
+      { kind: 'className', element: vid, newValue: 'cls' },
+      { kind: 'style', element: vid, newObjectText: '{ color: "red" }' },
+    ]);
+    expect(patches).toHaveLength(2);
+  });
+});
