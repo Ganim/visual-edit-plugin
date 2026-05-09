@@ -1,4 +1,4 @@
-import type { ElementSourceMap, SpikeEdit, TextPatch } from './types.ts';
+import type { ElementSourceMap, ElementSourceMapEntry, SpikeEdit, TextPatch } from './types.ts';
 
 export function planEdits(
   source: string,
@@ -24,7 +24,7 @@ export function planEdits(
 }
 
 function planClassNameEdit(
-  entry: import('./types.ts').ElementSourceMapEntry,
+  entry: ElementSourceMapEntry,
   newValue: string,
 ): TextPatch {
   if (entry.classNameAttr) {
@@ -44,7 +44,7 @@ function planClassNameEdit(
 }
 
 function planStyleEdit(
-  entry: import('./types.ts').ElementSourceMapEntry,
+  entry: ElementSourceMapEntry,
   newObjectText: string,
 ): TextPatch {
   if (entry.styleAttr) {
