@@ -1648,7 +1648,7 @@ Expected: FAIL — module not found.
 
 `packages/project-analyzer/src/findRoutes.ts`:
 ```ts
-import { join, relative } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import fg from 'fast-glob';
 import type { PageEntry } from '@visual-edit/shared';
 
@@ -1656,13 +1656,18 @@ const DEFAULT_GLOB = 'src/pages/**/*.tsx';
 
 export async function findRoutes(root: string, configRoutesGlob: string | undefined): Promise<PageEntry[]> {
   const pattern = configRoutesGlob ?? DEFAULT_GLOB;
+  const canonicalRoot = resolve(root) + sep; // trailing sep prevents 'src' matching 'src-other'
   const matches = await fg(pattern, { cwd: root, absolute: true });
-  return matches.map<PageEntry>((absPath) => ({
-    route: relative(root, absPath).replace(/\\/g, '/'),
-    filePath: absPath,
-    isClientOnly: true, // Phase 1.A: assume all are client-only; SSR detection is post-MVP
-    cssImports: [],     // Populated when we instrument; stays empty here
-  }));
+  return matches
+    // Defense in depth: glob can't normally escape root, but symlinks/aliases can.
+    // Drop anything outside canonical root so the adapter's fs.allow doesn't refuse it later.
+    .filter((absPath) => resolve(absPath).startsWith(canonicalRoot))
+    .map<PageEntry>((absPath) => ({
+      route: relative(root, absPath).replace(/\\/g, '/'),
+      filePath: absPath,
+      isClientOnly: true, // Phase 1.A: assume all are client-only; SSR detection is post-MVP
+      cssImports: [],     // Populated when we instrument; stays empty here
+    }));
 }
 ```
 
@@ -2404,7 +2409,14 @@ export async function generateEphemeralPreview(input: AdapterInput): Promise<Gen
   await mkdir(ephemeralDir, { recursive: true });
 
   // Detect a global CSS file for Tailwind / user styles. Optional — entry import is conditional.
+  // Note: app/globals.css (Next.js App Router) is intentionally NOT in the candidate list —
+  // Next.js is out of scope for 1.A and will get a dedicated adapter later.
   const userCssAbs = await findFirstExisting(input.info.root, CANDIDATE_CSS);
+  if (userCssAbs) {
+    // Log to stderr so the daemon's log captures which CSS file was auto-detected.
+    // If the wrong file is picked, the user can see it in the worker output.
+    process.stderr.write(`[adapter-vite] using global css: ${userCssAbs}\n`);
+  }
 
   // All entry imports are computed RELATIVE to ephemeralDir so Vite's module
   // resolver does not have to handle Windows absolute paths like `C:/...`.
@@ -2593,8 +2605,13 @@ describe('extractLocalUrl', () => {
     expect(extractLocalUrl('')).toBeNull();
   });
 
-  it('strips trailing ANSI reset / whitespace', () => {
+  it('strips trailing whitespace', () => {
     expect(extractLocalUrl('  Local:   http://localhost:5180/   ')).toBe('http://localhost:5180/');
+  });
+
+  it('strips ANSI color escape sequences attached to the URL', () => {
+    // \x1b[36m = cyan, \x1b[0m = reset. Vite emits these when stdout is a TTY.
+    expect(extractLocalUrl('  Local:   \x1b[36mhttp://localhost:5180/\x1b[0m')).toBe('http://localhost:5180/');
   });
 });
 
@@ -2623,11 +2640,15 @@ import type { AdapterHandle, GenerateResult } from './types.js';
 
 /**
  * Extract `http(s)://...` from a Vite "Local:" stdout line. Returns null if no match.
- * Tolerates leading whitespace, the optional `➜` arrow prefix, and trailing whitespace.
+ * Tolerates leading whitespace, the optional `➜` arrow prefix, trailing whitespace,
+ * and ANSI color reset escape sequences attached directly to the URL (we pass
+ * FORCE_COLOR=0 to vite, but defensive stripping is cheap).
  * Exported for unit testing.
  */
 export function extractLocalUrl(line: string): string | null {
-  const m = line.match(/Local:\s+(https?:\/\/[^\s]+)/);
+  // Strip ANSI escape codes BEFORE matching so they can't end up inside the captured URL.
+  const stripped = line.replace(/\x1b\[[0-9;]*m/g, '');
+  const m = stripped.match(/Local:\s+(https?:\/\/[^\s]+)/);
   if (!m) return null;
   return m[1]!.trim();
 }
@@ -2715,7 +2736,7 @@ export type { AdapterInput, AdapterHandle, GenerateResult } from './types.js';
 cd packages/adapters/vite && npm run build && npx vitest run
 ```
 
-Expected: 8 tests pass total (2 from generate, 5 extractLocalUrl + 1 startVite shape from spawn).
+Expected: 9 tests pass total (2 from generate, 6 extractLocalUrl + 1 startVite shape from spawn).
 
 - [ ] **Step 7: Commit + push**
 
@@ -3923,8 +3944,12 @@ async function discoverDaemonUrl(root: string): Promise<string> {
     );
   }
   if (!isProcessAlive(lock.pid)) {
+    const lockPath = resolve(root, '.visual-edit', 'daemon.lock');
     throw new Error(
-      `stale daemon lock found (pid ${lock.pid} not alive). Remove ${root}/.visual-edit/daemon.lock and restart.`,
+      `stale daemon lock found (pid ${lock.pid} not alive).\n` +
+      `Remove the lock file and restart:\n` +
+      `  rm ${lockPath}\n` +
+      `  node packages/daemon/dist/cli.js start --root ${root}`,
     );
   }
   return `http://127.0.0.1:${lock.port}`;
@@ -3988,7 +4013,8 @@ git push origin main
 
 **Files:**
 - Create: `apps/claude-plugin/plugin.json`
-- Create: `apps/claude-plugin/.mcp.json`
+- Create: `apps/claude-plugin/.mcp.json.template`
+- Create: `apps/claude-plugin/scripts/install-mcp.mjs`
 - Create: `apps/claude-plugin/commands/visual.md`
 - Create: `apps/claude-plugin/skills/using-visual-edit/SKILL.md`
 - Create: `apps/claude-plugin/README.md`
@@ -4005,29 +4031,55 @@ git push origin main
 }
 ```
 
-- [ ] **Step 2: .mcp.json**
+- [ ] **Step 2: .mcp.json template + install script**
 
-`apps/claude-plugin/.mcp.json`:
+The `.mcp.json` arg substitution semantics across MCP clients are not consistently documented for arbitrary `${VAR}` placeholders, so we keep the file as a TEMPLATE with literal placeholders and ship a tiny install script that writes the resolved file to a known location. This avoids relying on undocumented runtime substitution.
+
+`apps/claude-plugin/.mcp.json.template`:
 ```json
 {
   "mcpServers": {
     "visual-edit": {
       "command": "node",
-      "args": ["${VE_MCP_SERVER_PATH}", "--root", "${VE_PROJECT_ROOT}"],
+      "args": ["__MCP_SERVER_CLI__", "--root", "__PROJECT_ROOT__"],
       "env": {}
     }
   }
 }
 ```
 
-For 1.A local development, the user must set two env vars before launching Claude Code (e.g. in their shell profile or via a wrapper script):
+`apps/claude-plugin/scripts/install-mcp.mjs`:
+```js
+#!/usr/bin/env node
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { resolve, join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-```
-export VE_MCP_SERVER_PATH=/abs/path/to/visual-edit-plugin/packages/mcp-server/dist/cli.js
-export VE_PROJECT_ROOT=/abs/path/to/the/project/being/edited
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PLUGIN_ROOT = resolve(__dirname, '..');
+const REPO_ROOT = resolve(PLUGIN_ROOT, '..', '..');
+
+const projectRoot = resolve(process.argv[2] ?? process.cwd());
+const dest = process.argv[3] ?? resolve(projectRoot, '.mcp.json');
+
+const mcpServerCli = resolve(REPO_ROOT, 'packages/mcp-server/dist/cli.js');
+const tpl = readFileSync(join(PLUGIN_ROOT, '.mcp.json.template'), 'utf8');
+const out = tpl
+  .replace('__MCP_SERVER_CLI__', mcpServerCli.replace(/\\/g, '/'))
+  .replace('__PROJECT_ROOT__', projectRoot.replace(/\\/g, '/'));
+
+mkdirSync(dirname(dest), { recursive: true });
+writeFileSync(dest, out, 'utf8');
+console.log(`wrote ${dest}`);
+console.log(`mcp-server cli: ${mcpServerCli}`);
+console.log(`project root: ${projectRoot}`);
 ```
 
-(`${CLAUDE_PLUGIN_ROOT}/../../...` is unreliable because it depends on the plugin install layout. Using explicit env vars makes the dependency obvious. Phase 1.C will switch to `npx visual-edit-mcp-server` once we publish to npm.)
+For 1.A the user runs (after `npm run build` at the repo root):
+```
+node apps/claude-plugin/scripts/install-mcp.mjs /abs/path/to/their/project
+```
+which writes `/abs/path/to/their/project/.mcp.json` with absolute paths. Restart Claude Code; the `visual-edit` MCP server is now reachable from that project. Phase 1.C will replace this with `npx visual-edit-mcp-server` once we publish to npm.
 
 - [ ] **Step 3: /visual command**
 
@@ -4108,8 +4160,12 @@ Renders React pages in isolation with mocked data, no app boot required.
 ## Install (local development)
 
 1. Build the workspace: `npm run build` from the repo root.
-2. Add this plugin to a local marketplace, or symlink `apps/claude-plugin` into your `~/.claude/plugins/` directory.
-3. Restart Claude Code.
+2. Generate the project-level `.mcp.json`:
+   ```
+   node apps/claude-plugin/scripts/install-mcp.mjs /abs/path/to/your/project
+   ```
+3. (Optional) Symlink `apps/claude-plugin/` into `~/.claude/plugins/visual-edit/` so the slash command + skill are discoverable.
+4. Restart Claude Code.
 
 ## Use
 
@@ -4125,7 +4181,7 @@ In your Vite + React project:
 
 ```bash
 git add apps/
-git commit -m "feat(claude-plugin): /visual command + using-visual-edit skill + .mcp.json"
+git commit -m "feat(claude-plugin): /visual command + skill + .mcp.json template + install script"
 git push origin main
 ```
 
@@ -4635,7 +4691,7 @@ git push origin main
   - §2.10 daemon → Tasks 14-15 (lockFile, portFinder, supervisor with reject-on-exit, http, ws skeleton, daemon class with getPort + closeAllConnections, cli)
   - §2.11 editor-ui → DROPPED from 1.A (see "Sequencing" note); deferred to Phase 1.B
   - §2.12 mcp-server → Task 16 (open_page, close_preview, get_status; reads daemon port from lockfile)
-  - §2.13 apps/claude-plugin → Task 17 (.mcp.json uses VE_MCP_SERVER_PATH + VE_PROJECT_ROOT env vars)
+  - §2.13 apps/claude-plugin → Task 17 (.mcp.json template + install-mcp.mjs script writes resolved absolute paths)
   - §3.1 open page flow → exercised by Tasks 15 (daemon orchestration) + 19 (e2e)
   - §6.2 Phase 1 acceptance ("100 random edits pass invariants") → DEFERRED to Phase 1.B (1.A doesn't edit)
 - [ ] Phase 1.A acceptance gate (Task 19) is explicit and measurable
