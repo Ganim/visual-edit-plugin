@@ -11,72 +11,81 @@ import type {
 const VID_ATTR = 'data-vid';
 
 export function instrument(source: string, filePath: string): InstrumentResult {
-  const sf = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const sourceMap: ElementSourceMap = {};
+  // Pass 1: scan source, decide which elements need new vids, emit patches.
+  const sf1 = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const patches: TextPatch[] = [];
-
-  const visit = (node: ts.Node): void => {
+  const visit1 = (node: ts.Node): void => {
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-      processOpeningElement(node, sf, source, filePath, sourceMap, patches);
+      const existingVid = readExistingVid(node, sf1);
+      if (!existingVid) {
+        const tagName = node.tagName.getText(sf1);
+        const newVid = computeVid({
+          filePath,
+          start: node.getStart(sf1),
+          end: node.getEnd(),
+          tagName,
+        });
+        const insertPos = node.attributes.getEnd();
+        const prevChar = source[insertPos - 1];
+        const needsLeadingSpace = prevChar !== ' ' && prevChar !== '\n' && prevChar !== '\t';
+        const insertion = `${needsLeadingSpace ? ' ' : ''}${VID_ATTR}="${newVid}"`;
+        patches.push({
+          start: insertPos,
+          end: insertPos,
+          replacement: insertion,
+          reason: `inject ${VID_ATTR} for ${tagName}`,
+        });
+      }
     }
-    ts.forEachChild(node, visit);
+    ts.forEachChild(node, visit1);
   };
-  visit(sf);
+  visit1(sf1);
 
   const instrumented = applyPatchesToString(source, patches);
+
+  // Pass 2: re-parse instrumented, build sourceMap with positions valid in instrumented.
+  const sf2 = ts.createSourceFile(filePath, instrumented, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const sourceMap: ElementSourceMap = {};
+  const visit2 = (node: ts.Node): void => {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const vid = readExistingVid(node, sf2);
+      if (vid) {
+        const tagName = node.tagName.getText(sf2);
+        const nodeStart = node.getStart(sf2);
+        const nodeEnd = node.getEnd();
+        const attrsInsertPos = node.attributes.getEnd();
+        const entry: ElementSourceMapEntry = {
+          vid,
+          tagName,
+          nodeStart,
+          nodeEnd,
+          openingTagEnd: attrsInsertPos,
+          classNameAttr: findAttrRange(node, sf2, 'className'),
+          styleAttr: findAttrRange(node, sf2, 'style'),
+          attrsInsertPos,
+        };
+        sourceMap[vid] = entry;
+      }
+    }
+    ts.forEachChild(node, visit2);
+  };
+  visit2(sf2);
+
   return { instrumented, sourceMap };
 }
 
-function processOpeningElement(
+function readExistingVid(
   node: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
   sf: ts.SourceFile,
-  source: string,
-  filePath: string,
-  sourceMap: ElementSourceMap,
-  patches: TextPatch[],
-): void {
-  const tagName = node.tagName.getText(sf);
-  const nodeStart = node.getStart(sf);
-  const nodeEnd = node.getEnd();
-
-  // Skip if already has data-vid (idempotency).
+): string | null {
   for (const attr of node.attributes.properties) {
-    if (ts.isJsxAttribute(attr) && attr.name.getText(sf) === VID_ATTR) {
-      return;
+    if (!ts.isJsxAttribute(attr)) continue;
+    if (attr.name.getText(sf) !== VID_ATTR) continue;
+    if (attr.initializer && ts.isStringLiteral(attr.initializer)) {
+      return attr.initializer.text;
     }
   }
-
-  const vid = computeVid({ filePath, start: nodeStart, end: nodeEnd, tagName });
-
-  const classNameAttr = findAttrRange(node, sf, 'className');
-  const styleAttr = findAttrRange(node, sf, 'style');
-
-  // Attrs are inserted right at the end of attributes (== openingTagEnd, before > or />).
-  // ts.JsxAttributes.end gives us this position.
-  const attrsInsertPos = node.attributes.getEnd();
-
-  const entry: ElementSourceMapEntry = {
-    vid,
-    tagName,
-    nodeStart,
-    nodeEnd,
-    openingTagEnd: attrsInsertPos,
-    classNameAttr,
-    styleAttr,
-    attrsInsertPos,
-  };
-  sourceMap[vid] = entry;
-
-  // Inject ` data-vid="<vid>"` at attrsInsertPos. Need a leading space if previous char isn't whitespace.
-  const prevChar = source[attrsInsertPos - 1];
-  const needsLeadingSpace = prevChar !== ' ' && prevChar !== '\n' && prevChar !== '\t';
-  const insertion = `${needsLeadingSpace ? ' ' : ''}${VID_ATTR}="${vid}"`;
-  patches.push({
-    start: attrsInsertPos,
-    end: attrsInsertPos,
-    replacement: insertion,
-    reason: `inject ${VID_ATTR} for ${tagName}`,
-  });
+  return null;
 }
 
 function findAttrRange(

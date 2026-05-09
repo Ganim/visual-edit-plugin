@@ -79,15 +79,14 @@ describe('instrument — complex shapes', () => {
     expect(Object.keys(sourceMap)).toHaveLength(2); // ul + li
   });
 
-  it('is idempotent (re-instrumentation produces no new patches; sourceMap from second pass is empty)', () => {
+  it('is idempotent (re-instrumentation does not add new patches; sourceMap is repopulated from existing vids)', () => {
     const src = `const x = <div className="foo" />;`;
     const r1 = instrument(src, 'a.tsx');
     const r2 = instrument(r1.instrumented, 'a.tsx');
+    // No new patches — instrumented string unchanged.
     expect(r2.instrumented).toBe(r1.instrumented);
-    // Current contract: skipped elements are not re-added to sourceMap.
-    // If you want re-instrumentation to repopulate the sourceMap from existing
-    // data-vid attrs, that's a Phase 1 enhancement — for the spike, second pass
-    // is intentionally empty.
-    expect(Object.keys(r2.sourceMap)).toHaveLength(0);
+    // Same vids on both passes (positions in instrumented are stable across reruns,
+    // and existing vids are read back from data-vid attrs).
+    expect(Object.keys(r2.sourceMap).sort()).toEqual(Object.keys(r1.sourceMap).sort());
   });
 });
