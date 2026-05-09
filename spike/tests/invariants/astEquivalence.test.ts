@@ -37,4 +37,17 @@ describe('assertEditEquivalence', () => {
     const after = `const x = <div data-vid="abc12345"><span /></div>;`;
     expect(() => assertEditEquivalence(before, after, ['abc12345'])).toThrow(/structure/i);
   });
+
+  it('passes when nested JSX in attribute initializer is the targeted edit', () => {
+    const before = `<Foo data-vid="aaaa1111" icons={{ ok: <Icon data-vid="bbbb2222" className="a" /> }} />`;
+    const after  = `<Foo data-vid="aaaa1111" icons={{ ok: <Icon data-vid="bbbb2222" className="b" /> }} />`;
+    expect(() => assertEditEquivalence(before, after, ['bbbb2222'])).not.toThrow();
+  });
+
+  it('fails when nested JSX in attribute initializer is modified but not targeted', () => {
+    const before = `<Foo data-vid="aaaa1111" icons={{ ok: <Icon data-vid="bbbb2222" className="a" /> }} />`;
+    const after  = `<Foo data-vid="aaaa1111" icons={{ ok: <Icon data-vid="bbbb2222" className="b" /> }} />`;
+    // Targeting only the parent — should fail because nested icon's className changed without authorization.
+    expect(() => assertEditEquivalence(before, after, ['aaaa1111'])).toThrow(/non-targeted/i);
+  });
 });
