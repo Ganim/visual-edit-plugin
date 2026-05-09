@@ -1,0 +1,14 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./shared" },
+    { "path": "./protocol" },
+    { "path": "./diagnostics" },
+    { "path": "./project-analyzer" },
+    { "path": "./mock-runtime" },
+    { "path": "./adapters/vite" },
+    { "path": "./preview-worker" },
+    { "path": "./daemon" },
+    { "path": "./mcp-server" }
+  ]
+}

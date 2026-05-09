@@ -3,3 +3,9 @@ spike/oss/
 spike/coverage/
 **/*.log
 .DS_Store
+packages/*/dist/
+packages/*/.tsbuildinfo
+packages/adapters/*/dist/
+packages/adapters/*/.tsbuildinfo
+apps/*/dist/
+.visual-edit/

@@ -1,0 +1,23 @@
+{
+  "name": "visual-edit-monorepo",
+  "private": true,
+  "workspaces": ["packages/*", "packages/adapters/*", "apps/*", "examples/*"],
+  "engines": { "node": ">=22.0.0" },
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b packages/tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "prettier --check .",
+    "format": "prettier --write .",
+    "clean": "tsc -b packages/tsconfig.json --clean && rimraf packages/*/dist packages/adapters/*/dist"
+  },
+  "devDependencies": {
+    "typescript": "5.6.3",
+    "vitest": "2.1.4",
+    "tsx": "4.19.2",
+    "@types/node": "22.9.0",
+    "prettier": "3.3.3",
+    "rimraf": "6.0.1"
+  }
+}
