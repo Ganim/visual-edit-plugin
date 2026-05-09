@@ -38,7 +38,7 @@ export async function loadConfig(root: string): Promise<VisualEditConfig | null>
         severity: 'fatal',
         recovery: 'user-action',
         blame: 'user-config',
-        hint: `Only \${ safePrefixes.join(',') }-prefixed env vars are exposed. Move secret reads outside the config.`,
+        hint: `Only VITE_, PUBLIC_, NEXT_PUBLIC_-prefixed env vars are exposed by default. Move secret reads outside the config.`,
       }));
     }
 
