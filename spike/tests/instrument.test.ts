@@ -45,3 +45,42 @@ describe('instrument — baseline', () => {
     expect(entry.styleAttr).toBeNull();
   });
 });
+
+describe('instrument — complex shapes', () => {
+  it('handles nested elements with unique vids', () => {
+    const src = `const x = <div><span>a</span><span>b</span></div>;`;
+    const { sourceMap, instrumented } = instrument(src, 'a.tsx');
+    expect(Object.keys(sourceMap)).toHaveLength(3); // div + 2 spans
+    const vids = Object.keys(sourceMap);
+    expect(new Set(vids).size).toBe(3); // all unique
+    for (const v of vids) {
+      expect(instrumented).toContain(`data-vid="${v}"`);
+    }
+  });
+
+  it('skips fragments (<>...</>)', () => {
+    const src = `const x = <><div /><span /></>;`;
+    const { sourceMap } = instrument(src, 'a.tsx');
+    // Fragment itself has no opening tag we instrument; only div + span.
+    expect(Object.keys(sourceMap)).toHaveLength(2);
+  });
+
+  it('handles conditional JSX', () => {
+    const src = `const x = cond ? <div /> : <span />;`;
+    const { sourceMap } = instrument(src, 'a.tsx');
+    expect(Object.keys(sourceMap)).toHaveLength(2);
+  });
+
+  it('handles JSX inside expression children', () => {
+    const src = `const x = <ul>{items.map(i => <li key={i}>{i}</li>)}</ul>;`;
+    const { sourceMap } = instrument(src, 'a.tsx');
+    expect(Object.keys(sourceMap)).toHaveLength(2); // ul + li
+  });
+
+  it('is idempotent (re-instrumentation is a no-op)', () => {
+    const src = `const x = <div className="foo" />;`;
+    const r1 = instrument(src, 'a.tsx');
+    const r2 = instrument(r1.instrumented, 'a.tsx');
+    expect(r2.instrumented).toBe(r1.instrumented);
+  });
+});
