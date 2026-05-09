@@ -16,5 +16,6 @@
     "lib": ["ES2022"],
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src/**/*", "tests/**/*", "scripts/**/*"]
+  "include": ["src/**/*", "tests/**/*", "scripts/**/*"],
+  "exclude": ["tests/__fixtures__/**"]
 }
