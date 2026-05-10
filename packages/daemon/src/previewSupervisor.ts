@@ -1,4 +1,5 @@
 import { fork, type ChildProcess } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AdapterInput } from '@visual-edit/adapter-vite';
@@ -14,9 +15,22 @@ function workerEntry(): string {
   return resolve(__dirname, '..', '..', 'preview-worker', 'dist', 'index.js');
 }
 
+/**
+ * Best-effort cleanup of an ephemeral preview directory.
+ * Swallows errors (e.g. permission denied, already removed) — cleanup must not crash the daemon.
+ */
+export function cleanupPreviewDir(dir: string): void {
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch {
+    // ignore — best-effort
+  }
+}
+
 export interface SupervisedSession {
   session: PreviewSession;
   child: ChildProcess;
+  previewDir: string;
 }
 
 export class PreviewSupervisor {
@@ -53,7 +67,8 @@ export class PreviewSupervisor {
               startedAt: new Date().toISOString(),
               status: 'ready',
             };
-            this.sessions.set(sessionId, { session, child });
+            const previewDir = msg.ephemeralDir ?? '';
+            this.sessions.set(sessionId, { session, child, previewDir });
             resolveSession(session);
           });
         } else if (msg.kind === 'error') {
@@ -92,6 +107,7 @@ export class PreviewSupervisor {
     if (!s.child.killed) s.child.kill('SIGKILL');
     s.session.status = 'closed';
     this.sessions.delete(sessionId);
+    if (s.previewDir) cleanupPreviewDir(s.previewDir);
   }
 
   list(): PreviewSession[] {

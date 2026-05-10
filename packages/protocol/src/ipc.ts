@@ -9,6 +9,8 @@ export type IpcStartMessage = z.infer<typeof IpcStartMessage>;
 export const IpcReadyMessage = z.object({
   kind: z.literal('ready'),
   url: z.string().url(),
+  /** Absolute path to the ephemeral preview directory, so the daemon can clean it up on stop. */
+  ephemeralDir: z.string().optional(),
 });
 export type IpcReadyMessage = z.infer<typeof IpcReadyMessage>;
 

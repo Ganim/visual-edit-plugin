@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve, resolve as pathResolve } from 'node:path';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { readLock } from '@visual-edit/daemon';
+import { readDaemonLock as readLock } from '@visual-edit/shared';
 import { registerTools } from './tools.js';
 
 const AUTO_SPAWN_FLAG = process.env.MCP_AUTO_SPAWN === '1';

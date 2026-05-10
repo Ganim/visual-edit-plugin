@@ -42,7 +42,7 @@ async function main(): Promise<void> {
     });
 
     const h = await handle;
-    sendToParent(process, { kind: 'ready', url: h.url });
+    sendToParent(process, { kind: 'ready', url: h.url, ephemeralDir: generated.ephemeralDir });
   } catch (err) {
     const e = err as Error;
     sendToParent(process, { kind: 'error', message: e.message, stack: e.stack });
