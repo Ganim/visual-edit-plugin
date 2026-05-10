@@ -18,6 +18,7 @@ import { EditPipeline } from './editPipeline.js';
 import { FileWatcher } from './fileWatcher.js';
 import { QueueManager } from './queue/queueManager.js';
 import { LeaseTimer } from './queue/leaseTimer.js';
+import { resetQueueFiles } from './queue/reset.js';
 
 const DAEMON_VERSION = '0.0.0';
 
@@ -28,6 +29,8 @@ export interface DaemonOptions {
   editorAssetsRoot?: string;
   /** Default 'auto'. 'bind-only' refuses to connect to an existing daemon. 'connect-only' returns existing URL or throws. */
   mode?: 'auto' | 'bind-only' | 'connect-only';
+  /** When true, automatically delete a corrupt WAL + snapshot (VE_QUEUE_004) and start fresh rather than throwing. */
+  resetCorruptedQueue?: boolean;
 }
 
 export class Daemon {
@@ -46,10 +49,22 @@ export class Daemon {
   private leaseTimer?: LeaseTimer;
   private connectedPort?: number;
   private configReloader?: ConfigReloader;
+  private _queueWasReset = false;
 
   constructor(private opts: DaemonOptions) {
     this.logger = opts.logger ?? new Logger({ fsRoot: opts.root });
-    this.queue = new QueueManager(opts.root);
+    try {
+      this.queue = new QueueManager(opts.root);
+    } catch (err) {
+      const code = (err as { envelope?: { code?: string } }).envelope?.code;
+      if (code === 'VE_QUEUE_004' && opts.resetCorruptedQueue) {
+        resetQueueFiles(opts.root);
+        this.queue = new QueueManager(opts.root);
+        this._queueWasReset = true;
+      } else {
+        throw err;
+      }
+    }
     this.leaseTimer = new LeaseTimer(this.queue);
   }
 
@@ -60,6 +75,10 @@ export class Daemon {
   getPort(): number | undefined { return this.actualPort ?? this.connectedPort; }
 
   async start(): Promise<void> {
+    if (this._queueWasReset) {
+      this.logger.warn('queue snapshot was corrupt — auto-reset', { code: 'VE_QUEUE_004' });
+    }
+
     const desiredMode = this.opts.mode ?? 'auto';
     const decision = await decideLockAction(this.opts.root);
 
