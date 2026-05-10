@@ -5,6 +5,8 @@ import { findCssRuleRange } from './cssModuleParser.js';
 
 export interface PlannedFile {
   filePath: string;
+  /** Current content of the file that patches were planned against. */
+  source: string;
   patches: TextPatch[];
 }
 
@@ -27,9 +29,14 @@ export interface PlanEditsInput {
 export function planEdits(input: PlanEditsInput): PlannedFile[] {
   // Group results by file path; the page file is the default target for className/style edits.
   const byFile = new Map<string, TextPatch[]>();
+  // Track the source content for each file (page file from input.source; external files from readExternalFile).
+  const byFileSource = new Map<string, string>();
 
-  const ensureFile = (filePath: string): TextPatch[] => {
-    if (!byFile.has(filePath)) byFile.set(filePath, []);
+  const ensureFile = (filePath: string, source?: string): TextPatch[] => {
+    if (!byFile.has(filePath)) {
+      byFile.set(filePath, []);
+      byFileSource.set(filePath, source ?? '');
+    }
     return byFile.get(filePath)!;
   };
 
@@ -47,9 +54,9 @@ export function planEdits(input: PlanEditsInput): PlannedFile[] {
     }
 
     if (edit.kind === 'className') {
-      ensureFile(input.filePath).push(planClassNameEdit(entry, edit.newValue));
+      ensureFile(input.filePath, input.source).push(planClassNameEdit(entry, edit.newValue));
     } else if (edit.kind === 'style') {
-      ensureFile(input.filePath).push(planStyleEdit(entry, edit.newObjectText));
+      ensureFile(input.filePath, input.source).push(planStyleEdit(entry, edit.newObjectText));
     } else if (edit.kind === 'css-module') {
       if (!entry.cssModule) {
         throw new VisualEditError(makeEnvelope({
@@ -64,7 +71,7 @@ export function planEdits(input: PlanEditsInput): PlannedFile[] {
       const absPath = input.resolvePath(entry.cssModule.importPath);
       const cssSource = input.readExternalFile(absPath);
       const range = findCssRuleRange(cssSource, edit.binding);
-      ensureFile(absPath).push({
+      ensureFile(absPath, cssSource).push({
         start: range.bodyStart,
         end: range.bodyEnd,
         replacement: ` ${edit.newRuleBody} `,
@@ -90,7 +97,11 @@ export function planEdits(input: PlanEditsInput): PlannedFile[] {
     }
   }
 
-  return Array.from(byFile.entries()).map(([filePath, patches]) => ({ filePath, patches }));
+  return Array.from(byFile.entries()).map(([filePath, patches]) => ({
+    filePath,
+    source: byFileSource.get(filePath) ?? '',
+    patches,
+  }));
 }
 
 function planClassNameEdit(entry: ElementSourceMapEntry, newValue: string): TextPatch {

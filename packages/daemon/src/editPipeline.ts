@@ -5,13 +5,13 @@ import {
   instrument,
   planEdits,
   apply,
-  commit as commitWrite,
+  commitMultiFile,
   rollback as rollbackWrite,
   writeBackup,
   appendCommit,
   type ElementSourceMap,
   type TextPatch,
-  type CommitResult,
+  type MultiFileCommitResult,
 } from '@visual-edit/code-mods';
 import type { Edit } from '@visual-edit/shared';
 
@@ -24,10 +24,13 @@ export interface EditPipelineOpts {
 
 export interface DryRunArtifact {
   planId: string;
-  patches: TextPatch[];
-  beforeHash: string;
-  afterHash: string;
-  newContent: string;
+  files: Array<{
+    filePath: string;
+    patches: TextPatch[];
+    beforeHash: string;
+    afterHash: string;
+    newContent: string;
+  }>;
 }
 
 export interface InstrumentSnapshot {
@@ -98,33 +101,39 @@ export class EditPipeline {
       resolvePath: (importPath) => resolve(dirname(this.opts.filePath), importPath),
       readExternalFile: (absPath) => readFileSync(absPath, 'utf8'),
     });
-    // For now, only handle single-file (page file) — multi-file lands in Task 6.
-    const patches = planned.find((p) => p.filePath === this.opts.filePath)?.patches ?? [];
-    const applied = apply(snap.sourceText, patches);
     const planId = randomBytes(4).toString('hex');
-    const artifact: DryRunArtifact = {
-      planId,
-      patches,
-      beforeHash: applied.beforeHash,
-      afterHash: applied.afterHash,
-      newContent: applied.after,
-    };
+    const files = planned.map((p) => {
+      const applied = apply(p.source, p.patches);
+      return {
+        filePath: p.filePath,
+        patches: p.patches,
+        beforeHash: applied.beforeHash,
+        afterHash: applied.afterHash,
+        newContent: applied.after,
+      };
+    });
+    const artifact: DryRunArtifact = { planId, files };
     this.dryRuns.set(planId, artifact);
     return artifact;
   }
 
-  async commit(planId: string): Promise<CommitResult> {
+  async commit(planId: string): Promise<MultiFileCommitResult> {
     const dr = this.dryRuns.get(planId);
     if (!dr) throw new Error(`commit: unknown planId ${planId}`);
-    const result = await commitWrite({
+    const result = await commitMultiFile({
       root: this.opts.root,
-      filePath: this.opts.filePath,
-      expectedBeforeHash: dr.beforeHash,
-      newContent: dr.newContent,
+      files: dr.files.map((f) => ({
+        filePath: f.filePath,
+        expectedBeforeHash: f.beforeHash,
+        newContent: f.newContent,
+      })),
     });
     if (result.status === 'committed') {
-      this.opts.onSelfWrite?.(this.opts.filePath, result.sha256After);
-      // Refresh snapshot from the new disk content (vids are unchanged; positions shifted).
+      // Notify file watcher for each written file.
+      for (const f of result.files) {
+        this.opts.onSelfWrite?.(f.filePath, f.sha256After);
+      }
+      // Refresh snapshot from the page file (vids are unchanged; positions shifted).
       const newContent = readFileSync(this.opts.filePath, 'utf8');
       const re = instrument(newContent, this.opts.filePath);
       this.snapshot = { sourceText: re.instrumented, sourceMap: re.sourceMap };

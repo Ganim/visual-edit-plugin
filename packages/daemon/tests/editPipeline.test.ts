@@ -18,8 +18,9 @@ describe('EditPipeline', () => {
     const vid = Object.keys(sourceMap)[0]!;
 
     const dry = await ep.planAndApply([{ kind: 'className', element: vid, newValue: 'b' }]);
-    expect(dry.patches).toHaveLength(1);
-    expect(dry.beforeHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(dry.files).toHaveLength(1);
+    expect(dry.files[0]!.patches).toHaveLength(1);
+    expect(dry.files[0]!.beforeHash).toMatch(/^[a-f0-9]{64}$/);
 
     const commit = await ep.commit(dry.planId);
     expect(commit.status).toBe('committed');
