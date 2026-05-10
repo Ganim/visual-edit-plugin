@@ -1,12 +1,13 @@
 import { randomBytes } from 'node:crypto';
-import { resolve } from 'node:path';
 import { Logger } from '@visual-edit/diagnostics';
 import { CODES, VisualEditError, makeEnvelope } from '@visual-edit/diagnostics';
 import { analyze, loadConfig, findRoutes, discoverSchemas } from '@visual-edit/project-analyzer';
 import type { ProjectInfo } from '@visual-edit/shared';
 import type { AdapterInput } from '@visual-edit/adapter-vite';
 import { readCommitLog, rollback as codeModsRollback } from '@visual-edit/code-mods';
-import { writeLock, removeLock, readLock } from './lockFile.js';
+import { writeLock, removeLock } from './lockFile.js';
+import { decideLockAction } from './lockTakeover.js';
+import { LockHeartbeat } from './lockHeartbeat.js';
 import { findFreePort } from './portFinder.js';
 import { PreviewSupervisor } from './previewSupervisor.js';
 import { createHttpServer } from './http.js';
@@ -22,6 +23,8 @@ export interface DaemonOptions {
   port?: number;
   logger?: Logger;
   editorAssetsRoot?: string;
+  /** Default 'auto'. 'bind-only' refuses to connect to an existing daemon. 'connect-only' returns existing URL or throws. */
+  mode?: 'auto' | 'bind-only' | 'connect-only';
 }
 
 export class Daemon {
@@ -35,26 +38,72 @@ export class Daemon {
   private projectInfo?: ProjectInfo;
   private actualPort?: number;
   private queue: QueueManager;
+  private mode: 'pre-start' | 'bound' | 'connected' | 'took-over' = 'pre-start';
+  private heartbeat?: LockHeartbeat;
+  private connectedPort?: number;
 
   constructor(private opts: DaemonOptions) {
     this.logger = opts.logger ?? new Logger();
     this.queue = new QueueManager(opts.root);
   }
 
-  /** Resolved port the daemon is actually listening on. Undefined before start(). */
-  getPort(): number | undefined { return this.actualPort; }
+  /** Current lifecycle mode. */
+  getMode(): 'pre-start' | 'bound' | 'connected' | 'took-over' { return this.mode; }
+
+  /** Resolved port the daemon is actually listening on (own or connected). Undefined before start(). */
+  getPort(): number | undefined { return this.actualPort ?? this.connectedPort; }
 
   async start(): Promise<void> {
-    const existing = await readLock(this.opts.root);
-    if (existing && isProcessAlive(existing.pid)) {
+    const desiredMode = this.opts.mode ?? 'auto';
+    const decision = await decideLockAction(this.opts.root);
+
+    if (decision.kind === 'refuse') {
+      throw new VisualEditError(makeEnvelope({
+        code: CODES.VE_PROTOCOL_001_VERSION_MISMATCH,
+        message: `[VE_PROTOCOL_001]: ${decision.reason}`,
+        severity: 'fatal',
+        recovery: 'user-action',
+        blame: 'environment',
+        hint: 'Delete .visual-edit/daemon.lock and restart.',
+      }));
+    }
+
+    if (decision.kind === 'connect') {
+      if (desiredMode === 'bind-only') {
+        throw new VisualEditError(makeEnvelope({
+          code: CODES.VE_FS_001_LOCK_HELD,
+          message: `[VE_FS_001]: daemon already running with pid ${decision.pid} on port ${decision.port}`,
+          severity: 'error',
+          recovery: 'user-action',
+          blame: 'environment',
+          hint: 'Stop the other daemon or use mode: "auto".',
+        }));
+      }
+      // Connect path — record the existing daemon's port and skip bind.
+      this.connectedPort = decision.port;
+      this.mode = 'connected';
+      return;
+    }
+
+    // At this point decision.kind is 'takeover' or 'bind' — no live daemon to connect to.
+    if (desiredMode === 'connect-only') {
       throw new VisualEditError(makeEnvelope({
         code: CODES.VE_FS_001_LOCK_HELD,
-        message: `[VE_FS_001]: daemon already running with pid ${existing.pid} on port ${existing.port}`,
+        message: `[VE_FS_001]: connect-only mode requested but no live daemon found at ${this.opts.root}`,
         severity: 'error',
         recovery: 'user-action',
         blame: 'environment',
-        hint: 'Stop the other daemon or pick a different project root.',
+        hint: 'Start a daemon first, then connect.',
       }));
+    }
+
+    if (decision.kind === 'takeover') {
+      // Continue with the normal bind path; writeLock() will overwrite the stale lock atomically.
+      this.mode = 'took-over';
+      // fall through to bind path
+    } else {
+      // decision.kind === 'bind'
+      this.mode = 'bound';
     }
 
     this.projectInfo = await analyze(this.opts.root);
@@ -119,6 +168,9 @@ export class Daemon {
 
     await writeLock(this.opts.root, { pid: process.pid, port, daemonVersion: DAEMON_VERSION });
 
+    this.heartbeat = new LockHeartbeat(this.opts.root);
+    this.heartbeat.start();
+
     this.logger.info('daemon started', { port, root: this.opts.root, pid: process.pid });
 
     process.on('SIGTERM', () => this.stop().then(() => process.exit(0)));
@@ -126,6 +178,9 @@ export class Daemon {
   }
 
   async stop(): Promise<void> {
+    // Connected mode owns no bound resources — skip all cleanup.
+    if (this.mode === 'connected') return;
+
     await this.supervisor.stopAll();
     if (this.wsServer) {
       // Force-close all open WS connections so close() resolves.
@@ -141,6 +196,7 @@ export class Daemon {
     await this.fileWatcher.close();
     // QueueManager writes are individually fsync'd by appendWalEntry; no flush needed here.
     // 1.C does NOT implement WAL compaction (deferred to 1.D).
+    this.heartbeat?.stop();
     await removeLock(this.opts.root);
     this.logger.info('daemon stopped');
   }
@@ -214,10 +270,6 @@ export class Daemon {
     // No active pipeline — perform a one-shot rollback.
     await codeModsRollback({ root: this.opts.root, commitId: req.commitId });
   }
-}
-
-function isProcessAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
 function filterEnv(raw: NodeJS.ProcessEnv, prefixes: readonly string[]): Record<string, string> {
