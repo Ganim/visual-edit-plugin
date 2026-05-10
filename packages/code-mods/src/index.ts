@@ -17,3 +17,4 @@ export { assertCommentsPreserved } from './invariants/commentPreservation.js';
 export { assertWhitespacePreservedOutsidePatches } from './invariants/whitespacePreservation.js';
 export { runEditPipeline, type PipelineInput, type PipelineResult } from './pipeline.js';
 export { writeBackup, readBackup, listBackups, type BackupOps } from './backups.js';
+export { appendCommit, readCommitLog, findCommit, type CommitLogEntry } from './commitLog.js';
