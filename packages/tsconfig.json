@@ -5,6 +5,7 @@
     { "path": "./protocol" },
     { "path": "./diagnostics" },
     { "path": "./project-analyzer" },
+    { "path": "./code-mods" },
     { "path": "./mock-runtime" },
     { "path": "./adapters/vite" },
     { "path": "./preview-worker" },
