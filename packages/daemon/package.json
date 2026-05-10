@@ -23,6 +23,7 @@
     "@visual-edit/adapter-vite": "*",
     "@visual-edit/preview-worker": "*",
     "@visual-edit/code-mods": "*",
+    "@visual-edit/editor-ui": "*",
     "chokidar": "^3.6.0",
     "ws": "8.18.0"
   },
