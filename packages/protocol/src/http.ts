@@ -9,6 +9,7 @@ export type OpenPreviewRequest = z.infer<typeof OpenPreviewRequest>;
 export const OpenPreviewResponse = z.object({
   url: z.string().url(),
   sessionId: z.string().min(1),
+  editorUrl: z.string().url(),
 });
 export type OpenPreviewResponse = z.infer<typeof OpenPreviewResponse>;
 

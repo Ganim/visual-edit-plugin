@@ -19,6 +19,7 @@ export interface DaemonOptions {
   root: string;
   port?: number;
   logger?: Logger;
+  editorAssetsRoot?: string;
 }
 
 export class Daemon {
@@ -69,6 +70,7 @@ export class Daemon {
       openPreview: this.openPreview.bind(this),
       closePreview: this.closePreview.bind(this),
       getStatus: this.getStatus.bind(this),
+      ...(this.opts.editorAssetsRoot !== undefined ? { editorAssetsRoot: this.opts.editorAssetsRoot } : {}),
     });
     this.wsServer = attachWebSocket(this.httpServer, {
       getSession: (id) => this.supervisor.list().find((s) => s.id === id) ?? null,
@@ -116,7 +118,7 @@ export class Daemon {
     this.logger.info('daemon stopped');
   }
 
-  async openPreview(req: { root: string; page: string }): Promise<{ url: string; sessionId: string }> {
+  async openPreview(req: { root: string; page: string }): Promise<{ url: string; sessionId: string; editorUrl: string }> {
     if (!this.projectInfo) throw new Error('daemon not started');
     const matchedPage = this.projectInfo.routes.find((r) => r.route === req.page || r.filePath.endsWith(req.page));
     if (!matchedPage) {
@@ -153,7 +155,8 @@ export class Daemon {
     });
     this.editPipelines.set(sessionId, pipeline);
     await this.fileWatcher.watch(matchedPage.filePath);
-    return { url: session.url, sessionId };
+    const editorUrl = `http://127.0.0.1:${this.actualPort}/__editor/?session=${sessionId}`;
+    return { url: session.url, sessionId, editorUrl };
   }
 
   async closePreview(req: { sessionId: string }): Promise<void> {

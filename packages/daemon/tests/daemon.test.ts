@@ -6,7 +6,7 @@ describe('http handlers (unit)', () => {
   it('wires open/close/status endpoints', async () => {
     let opened = false;
     const server = createHttpServer({
-      openPreview: async () => { opened = true; return { url: 'http://x', sessionId: 's' }; },
+      openPreview: async () => { opened = true; return { url: 'http://x', sessionId: 's', editorUrl: 'http://127.0.0.1:5170/__editor/?session=s' }; },
       closePreview: async () => {},
       getStatus: async () => ({ daemonVersion: '0.0.0', uptime: 0, activePreviews: 0, workerHealth: {} }),
     });
@@ -20,7 +20,7 @@ describe('http handlers (unit)', () => {
     });
     const body = await resp.json();
     expect(opened).toBe(true);
-    expect(body).toEqual({ url: 'http://x', sessionId: 's' });
+    expect(body).toEqual({ url: 'http://x', sessionId: 's', editorUrl: 'http://127.0.0.1:5170/__editor/?session=s' });
 
     await new Promise<void>((r) => server.close(() => r()));
   });

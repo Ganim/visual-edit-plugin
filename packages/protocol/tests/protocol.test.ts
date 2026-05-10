@@ -19,10 +19,15 @@ describe('protocol', () => {
     expect(parsed.page).toBe('src/App.tsx');
   });
 
-  it('OpenPreviewResponse requires url + sessionId', () => {
-    const ok = OpenPreviewResponse.parse({ url: 'http://localhost:5180/?s=a', sessionId: 'a' });
+  it('OpenPreviewResponse requires url + sessionId + editorUrl', () => {
+    const ok = OpenPreviewResponse.parse({
+      url: 'http://localhost:5180/?s=a',
+      sessionId: 'a',
+      editorUrl: 'http://127.0.0.1:5170/__editor/?session=a',
+    });
     expect(ok.url).toMatch(/^http/);
-    expect(() => OpenPreviewResponse.parse({ url: 'x' })).toThrow();
+    expect(ok.editorUrl).toMatch(/\/__editor\//);
+    expect(() => OpenPreviewResponse.parse({ url: 'http://localhost:5180/?s=a', sessionId: 'a' })).toThrow();
   });
 
   it('WsHelloMessage carries protocol version', () => {
