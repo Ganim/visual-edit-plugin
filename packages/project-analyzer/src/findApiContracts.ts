@@ -1,6 +1,7 @@
 import fg from 'fast-glob';
 import { createJiti } from 'jiti';
 import type { ApiEndpoint } from '@visual-edit/shared';
+import { CODES, VisualEditError, makeEnvelope } from '@visual-edit/diagnostics';
 
 interface RawEndpoint {
   method?: string;
@@ -22,7 +23,10 @@ function normalize(raw: RawEndpoint): ApiEndpoint | null {
   return out;
 }
 
-export async function findApiContracts(root: string): Promise<ApiEndpoint[]> {
+export async function findApiContracts(
+  root: string,
+  availableSchemas?: readonly string[],
+): Promise<ApiEndpoint[]> {
   const files = await fg('**/*.api.{ts,js,mjs}', {
     cwd: root,
     absolute: true,
@@ -51,6 +55,22 @@ export async function findApiContracts(root: string): Promise<ApiEndpoint[]> {
         const ep = normalize(raw);
         if (ep) out.push(ep);
       }
+    }
+  }
+
+  if (availableSchemas) {
+    const known = new Set(availableSchemas);
+    const orphans = out.filter((ep) => !known.has(ep.schemaName));
+    if (orphans.length > 0) {
+      const list = orphans.map((o) => `${o.method} ${o.url} → ${o.schemaName}`).join('; ');
+      throw new VisualEditError(makeEnvelope({
+        code: CODES.VE_PROJECT_003_ORPHAN_API,
+        message: `[VE_PROJECT_003]: API endpoints reference unknown schemas: ${list}`,
+        severity: 'error',
+        recovery: 'user-action',
+        blame: 'user-config',
+        hint: 'Either define the schema (Zod) and rerun discoverSchemas, or remove the endpoint.',
+      }));
     }
   }
 
