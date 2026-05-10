@@ -136,6 +136,13 @@ export function attachWebSocket(http: Server, handlers: WsHandlers): WebSocketSe
       }
 
       if (obj.kind === 'bye') { socket.close(1000, 'bye'); return; }
+
+      // Unknown kind — surface a structured error rather than silently drop.
+      if (sessionId) {
+        sendError(socket, sessionId, 'VE_PROTOCOL_002', `unknown WS kind: ${obj.kind}`, undefined);
+      } else {
+        socket.close(1003, 'unknown kind before hello');
+      }
     });
   });
 

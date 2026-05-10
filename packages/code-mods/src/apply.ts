@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { TextPatch } from './types.js';
+import { CODES, VisualEditError, makeEnvelope } from '@visual-edit/diagnostics';
 
 export interface ApplyResult {
   before: string;
@@ -20,9 +21,13 @@ export function apply(source: string, patches: TextPatch[]): ApplyResult {
     const prev = sorted[i - 1]!;
     const cur = sorted[i]!;
     if (cur.start < prev.end) {
-      throw new Error(
-        `apply: overlapping patches detected: [${prev.start},${prev.end}) and [${cur.start},${cur.end})`,
-      );
+      throw new VisualEditError(makeEnvelope({
+        code: CODES.VE_INTERNAL_999_ASSERT,
+        message: `[VE_INTERNAL_999]: apply: overlapping patches detected: [${prev.start},${prev.end}) and [${cur.start},${cur.end})`,
+        severity: 'fatal',
+        recovery: 'unrecoverable',
+        blame: 'tool',
+      }));
     }
   }
 

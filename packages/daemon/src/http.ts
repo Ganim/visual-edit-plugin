@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, statSync, realpathSync } from 'node:fs';
 import { join, normalize, sep, extname } from 'node:path';
 import {
   OpenPreviewRequest,
@@ -100,6 +100,14 @@ async function serveEditor(
   if (!(normalize(abs) + sep).startsWith(normRoot) && normalize(abs) !== normalize(assetsRoot)) {
     res.statusCode = 404; res.end('not found'); return;
   }
+  let realAbs: string;
+  try { realAbs = realpathSync(abs); }
+  catch { res.statusCode = 404; res.end('not found'); return; }
+  const realRoot = realpathSync(assetsRoot);
+  if (!(realAbs + sep).startsWith(realRoot + sep) && realAbs !== realRoot) {
+    res.statusCode = 404; res.end('not found'); return;
+  }
+  abs = realAbs;
   if (!existsSync(abs)) { res.statusCode = 404; res.end('not found'); return; }
   if (statSync(abs).isDirectory()) abs = join(abs, 'index.html');
   if (!existsSync(abs)) { res.statusCode = 404; res.end('not found'); return; }

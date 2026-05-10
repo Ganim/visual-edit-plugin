@@ -49,7 +49,7 @@ export class Daemon {
     if (existing && isProcessAlive(existing.pid)) {
       throw new VisualEditError(makeEnvelope({
         code: CODES.VE_FS_001_LOCK_HELD,
-        message: `daemon already running with pid ${existing.pid} on port ${existing.port}`,
+        message: `[VE_FS_001]: daemon already running with pid ${existing.pid} on port ${existing.port}`,
         severity: 'error',
         recovery: 'user-action',
         blame: 'environment',
@@ -152,7 +152,7 @@ export class Daemon {
       const alternatives = this.projectInfo.routes.slice(0, 5).map((r) => r.route);
       throw new VisualEditError(makeEnvelope({
         code: CODES.VE_PROJECT_002_ROUTE_NOT_FOUND,
-        message: `route '${req.page}' not found`,
+        message: `[VE_PROJECT_002]: route '${req.page}' not found`,
         severity: 'error',
         recovery: 'user-action',
         blame: 'user-config',
