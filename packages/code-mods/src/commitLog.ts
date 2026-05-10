@@ -35,10 +35,16 @@ export function appendCommit(root: string, entry: CommitLogEntry): void {
 export function readCommitLog(root: string): CommitLogEntry[] {
   const p = logPath(root);
   if (!existsSync(p)) return [];
-  return readFileSync(p, 'utf8')
-    .split('\n')
-    .filter((s) => s.trim().length > 0)
-    .map((line) => JSON.parse(line) as CommitLogEntry);
+  const entries: CommitLogEntry[] = [];
+  for (const line of readFileSync(p, 'utf8').split('\n')) {
+    if (line.trim().length === 0) continue;
+    try {
+      entries.push(JSON.parse(line) as CommitLogEntry);
+    } catch {
+      process.stderr.write(`[visual-edit] commitLog: skipping corrupted line: ${line}\n`);
+    }
+  }
+  return entries;
 }
 
 export function findCommit(root: string, commitId: string): CommitLogEntry | null {
