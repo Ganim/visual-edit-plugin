@@ -139,6 +139,8 @@ export class Daemon {
       await new Promise<void>((r) => this.httpServer!.close(() => r()));
     }
     await this.fileWatcher.close();
+    // QueueManager writes are individually fsync'd by appendWalEntry; no flush needed here.
+    // 1.C does NOT implement WAL compaction (deferred to 1.D).
     await removeLock(this.opts.root);
     this.logger.info('daemon stopped');
   }
