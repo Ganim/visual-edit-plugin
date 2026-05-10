@@ -22,6 +22,7 @@ export function connect(url: string, sessionId: string): WsClient {
     const s = useStore.getState();
     switch (msg.kind) {
       case 'snapshot':
+        (window as unknown as { __VE_DEBUG_SOURCEMAP?: typeof msg.sourceMap }).__VE_DEBUG_SOURCEMAP = msg.sourceMap as never;
         s.setSnapshot({
           url: msg['url'] as string,
           filePath: msg['filePath'] as string,

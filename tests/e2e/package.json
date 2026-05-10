@@ -12,6 +12,7 @@
     "playwright": "1.48.2"
   },
   "dependencies": {
-    "@visual-edit/daemon": "*"
+    "@visual-edit/daemon": "*",
+    "@visual-edit/code-mods": "*"
   }
 }
