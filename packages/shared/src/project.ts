@@ -27,6 +27,10 @@ export interface VisualEditConfig {
   routes?: string;
   mocks?: Record<string, unknown>;
   safeEnvPrefixes?: string[];
+  assetProxy?: {
+    remoteImageStrategy?: 'placeholder' | 'pass-through' | 'cached';
+    fontFallback?: 'system' | Record<string, string>;
+  };
 }
 
 /**

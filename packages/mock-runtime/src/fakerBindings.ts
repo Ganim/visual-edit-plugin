@@ -25,7 +25,7 @@ const STRING_FIELD_TABLE: Record<string, string> = {
   updatedAt: 'faker.date.recent().toISOString()',
   date: 'faker.date.recent().toISOString()',
   imageUrl: 'faker.image.url()',
-  avatarUrl: 'faker.image.avatar()',
+  avatarUrl: `'/__assets/proxy?u=https%3A%2F%2Fexample.com%2Favatar.png'`,
   image: 'faker.image.url()',
 };
 

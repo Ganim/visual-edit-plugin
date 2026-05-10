@@ -2,6 +2,30 @@ import { CODES, VisualEditError, makeEnvelope } from '@visual-edit/diagnostics';
 
 export type RemoteImageStrategy = 'placeholder' | 'pass-through' | 'cached';
 
+/**
+ * Guard against SSRF — blocks private/loopback/link-local addresses.
+ * Only http: and https: are allowed.
+ */
+function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return false;
+    if (/^10\./.test(host)) return false;
+    if (/^172\.(1[6-9]|2[0-9]|3[01])\./.test(host)) return false;
+    if (/^192\.168\./.test(host)) return false;
+    if (/^169\.254\./.test(host)) return false;
+    return true;
+  } catch { return false; }
+}
+
+const BLOCKED_RESPONSE: StrategyResponse = {
+  status: 403,
+  contentType: 'text/plain',
+  body: 'asset-proxy: blocked unsafe URL',
+};
+
 export interface StrategyContext {
   url: string;                           // the full external URL (after URL-decode)
   cache: Map<string, CachedAsset>;       // shared cache for 'cached' strategy
@@ -29,6 +53,7 @@ export async function placeholder(): Promise<StrategyResponse> {
 }
 
 export async function passThrough(ctx: StrategyContext): Promise<StrategyResponse> {
+  if (!isSafeUrl(ctx.url)) return BLOCKED_RESPONSE;
   const upstream = await fetch(ctx.url);
   const body = new Uint8Array(await upstream.arrayBuffer());
   return {
@@ -39,6 +64,7 @@ export async function passThrough(ctx: StrategyContext): Promise<StrategyRespons
 }
 
 export async function cached(ctx: StrategyContext): Promise<StrategyResponse> {
+  if (!isSafeUrl(ctx.url)) return BLOCKED_RESPONSE;
   const hit = ctx.cache.get(ctx.url);
   if (hit) return { status: 200, contentType: hit.contentType, body: hit.body };
   const upstream = await fetch(ctx.url);

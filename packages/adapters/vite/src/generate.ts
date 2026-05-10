@@ -153,7 +153,7 @@ export default defineConfig({
         const { createAssetMiddleware } = await import('@visual-edit/asset-proxy');
         server.middlewares.use(createAssetMiddleware({
           publicDir: ${JSON.stringify(input.info.publicDir ?? null)},
-          remoteImageStrategy: 'placeholder',
+          remoteImageStrategy: ${JSON.stringify(input.remoteImageStrategy ?? 'placeholder')},
         }));
       },
     },

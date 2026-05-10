@@ -12,11 +12,21 @@ interface RawEndpoint {
 
 const VALID_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']);
 
+/**
+ * Normalise a raw endpoint object loaded from a *.api.ts file.
+ *
+ * NOTE: `url: RegExp` is declared in ApiEndpoint but NOT yet supported here.
+ * RegExp URLs are silently skipped (return null) in 1.F scope and will be
+ * implemented in 1.G. Users who export a RegExp url will see the endpoint
+ * omitted from the MSW handler list until then.
+ */
 function normalize(raw: RawEndpoint): ApiEndpoint | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const method = String(raw.method ?? '').toUpperCase();
   const url = raw.url;
   const schemaName = raw.schemaName;
+  // RegExp URLs: not supported in 1.F — skip silently (1.G scope).
+  if (url !== undefined && (url as unknown) instanceof RegExp) return null;
   if (!VALID_METHODS.has(method) || typeof url !== 'string' || typeof schemaName !== 'string') return null;
   const out: ApiEndpoint = { method: method as ApiEndpoint['method'], url, schemaName };
   if (typeof raw.status === 'number') out.status = raw.status;

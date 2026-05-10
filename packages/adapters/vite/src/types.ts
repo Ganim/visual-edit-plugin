@@ -12,6 +12,12 @@ export interface AdapterInput {
    * before invoking the adapter (Phase 1.E Task 11).
    */
   endpoints?: ApiEndpoint[];
+  /**
+   * Remote image strategy for the asset-proxy. Defaults to 'placeholder' if absent.
+   * Reads from visual-edit.config.ts → assetProxy.remoteImageStrategy when wired
+   * by the daemon (Phase 1.F).
+   */
+  remoteImageStrategy?: 'placeholder' | 'pass-through' | 'cached';
   port: number;
   sessionId: string;
   /** Filtered env vars (already passed through safeEnvPrefixes). */

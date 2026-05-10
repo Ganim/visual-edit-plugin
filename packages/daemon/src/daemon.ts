@@ -157,33 +157,41 @@ export class Daemon {
       getQueue: () => this.queue,
     });
 
-    await new Promise<void>((r) => this.httpServer!.listen(port, '127.0.0.1', r));
+    try {
+      await new Promise<void>((r) => this.httpServer!.listen(port, '127.0.0.1', r));
 
-    this.fileWatcher.on('external-change', (e) => {
-      for (const [sessionId, pipeline] of this.editPipelines) {
-        if (pipeline.getFilePath() !== e.filePath) continue;
-        broadcastFileChanged(this.wsServer!, {
-          sessionId,
-          filePath: e.filePath,
-          sha256: e.sha256,
-          dirtySourceMap: true,
-        });
+      this.fileWatcher.on('external-change', (e) => {
+        for (const [sessionId, pipeline] of this.editPipelines) {
+          if (pipeline.getFilePath() !== e.filePath) continue;
+          broadcastFileChanged(this.wsServer!, {
+            sessionId,
+            filePath: e.filePath,
+            sha256: e.sha256,
+            dirtySourceMap: true,
+          });
+        }
+        invalidateAnalyzer(this.opts.root, e.filePath);
+      });
+
+      await writeLock(this.opts.root, { pid: process.pid, port, daemonVersion: DAEMON_VERSION });
+      // Verify we won the race — two daemons starting simultaneously can both reach writeLock.
+      const verify = await readLock(this.opts.root);
+      if (!verify || verify.pid !== process.pid) {
+        throw new VisualEditError(makeEnvelope({
+          code: CODES.VE_FS_001_LOCK_HELD,
+          message: `[VE_FS_001]: lost race to another daemon (lock now held by pid ${verify?.pid})`,
+          severity: 'error',
+          recovery: 'automatic-retry',
+          blame: 'environment',
+          hint: 'Another daemon started concurrently. Retry with mode: "auto".',
+        }));
       }
-      invalidateAnalyzer(this.opts.root, e.filePath);
-    });
-
-    await writeLock(this.opts.root, { pid: process.pid, port, daemonVersion: DAEMON_VERSION });
-    // Verify we won the race — two daemons starting simultaneously can both reach writeLock.
-    const verify = await readLock(this.opts.root);
-    if (!verify || verify.pid !== process.pid) {
-      throw new VisualEditError(makeEnvelope({
-        code: CODES.VE_FS_001_LOCK_HELD,
-        message: `[VE_FS_001]: lost race to another daemon (lock now held by pid ${verify?.pid})`,
-        severity: 'error',
-        recovery: 'automatic-retry',
-        blame: 'environment',
-        hint: 'Another daemon started concurrently. Retry with mode: "auto".',
-      }));
+    } catch (err) {
+      // Close any half-bound server so the port is released before re-throwing.
+      if (this.httpServer) {
+        try { this.httpServer.close(); } catch { /* ignore */ }
+      }
+      throw err;
     }
 
     this.heartbeat = new LockHeartbeat(this.opts.root);
@@ -254,7 +262,10 @@ export class Daemon {
     // are generated for all *.api.ts-declared endpoints (Phase 1.E Task 11).
     // If findApiContracts throws VE_PROJECT_003 (orphan endpoints), propagate as-is
     // so the caller gets a structured error rather than a silent empty handler list.
-    const endpoints = await findApiContracts(this.opts.root, schemas.map((s) => s.name));
+    const fileEndpoints = await findApiContracts(this.opts.root, schemas.map((s) => s.name));
+    // Also merge any endpoints declared directly in visual-edit.config.ts (config.api).
+    const configEndpoints = this.projectInfo.config?.api ?? [];
+    const endpoints = [...fileEndpoints, ...configEndpoints];
 
     const adapterInput: AdapterInput = {
       info: this.projectInfo,
@@ -264,6 +275,7 @@ export class Daemon {
       endpoints,
       port: previewPort,
       sessionId,
+      remoteImageStrategy: this.projectInfo.config?.assetProxy?.remoteImageStrategy ?? 'placeholder',
       env: filterEnv(process.env, this.projectInfo.config?.safeEnvPrefixes ?? ['VITE_', 'PUBLIC_', 'NEXT_PUBLIC_']),
     };
 

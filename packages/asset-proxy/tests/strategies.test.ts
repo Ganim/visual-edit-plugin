@@ -43,4 +43,43 @@ describe('asset strategies', () => {
       dispatchStrategy('bogus' as never, { url: 'http://x', cache: new Map() }),
     ).rejects.toThrow(/VE_ASSET_001/);
   });
+
+  describe('SSRF guard', () => {
+    it('pass-through blocks loopback URLs (127.0.0.1)', async () => {
+      const r = await passThrough({ url: 'http://127.0.0.1:6379/', cache: new Map() });
+      expect(r.status).toBe(403);
+      expect(r.body).toMatch(/blocked unsafe URL/);
+    });
+
+    it('pass-through blocks localhost URLs', async () => {
+      const r = await passThrough({ url: 'http://localhost:8080/secret', cache: new Map() });
+      expect(r.status).toBe(403);
+    });
+
+    it('pass-through blocks RFC-1918 (192.168.x.x)', async () => {
+      const r = await passThrough({ url: 'http://192.168.1.1/', cache: new Map() });
+      expect(r.status).toBe(403);
+    });
+
+    it('pass-through blocks link-local (169.254.x.x)', async () => {
+      const r = await passThrough({ url: 'http://169.254.169.254/latest/meta-data/', cache: new Map() });
+      expect(r.status).toBe(403);
+    });
+
+    it('cached blocks loopback URLs', async () => {
+      const r = await cached({ url: 'http://127.0.0.1:6379/', cache: new Map() });
+      expect(r.status).toBe(403);
+    });
+
+    it('pass-through allows public URLs (does not block)', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        status: 200,
+        arrayBuffer: async () => new ArrayBuffer(4),
+        headers: { get: () => 'image/png' },
+      } as unknown as Response);
+      const r = await passThrough({ url: 'https://example.com/image.png', cache: new Map() });
+      expect(r.status).toBe(200);
+      fetchSpy.mockRestore();
+    });
+  });
 });
