@@ -20,9 +20,12 @@ describe('invariants', () => {
       ');\n';
     const { instrumented, sourceMap } = instrument(src, 'X.tsx');
     const divVid = Object.entries(sourceMap).find(([, e]) => e.tagName === 'div')![0];
-    const patches = planEdits(instrumented, sourceMap, [
-      { kind: 'className', element: divVid, newValue: 'new' },
-    ]);
+    const result = planEdits({
+      filePath: 'X.tsx', source: instrumented, sourceMap,
+      edits: [{ kind: 'className', element: divVid, newValue: 'new' }],
+      resolvePath: () => '', readExternalFile: () => '',
+    });
+    const patches = result.find((f) => f.filePath === 'X.tsx')!.patches;
     const { after } = apply(instrumented, patches);
     expect(() => assertEditEquivalence(instrumented, after, [divVid])).not.toThrow();
     expect(() => assertCommentsPreserved(instrumented, after)).not.toThrow();

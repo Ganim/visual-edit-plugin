@@ -34,7 +34,16 @@ export function runEditPipeline(input: PipelineInput): PipelineResult {
   }
   const editOrEdits = input.pickEdit(vids, sourceMap);
   const edits = Array.isArray(editOrEdits) ? editOrEdits : [editOrEdits];
-  const patches = planEdits(instrumented, sourceMap, edits);
+  const planned = planEdits({
+    filePath: input.filePath,
+    source: instrumented,
+    sourceMap,
+    edits,
+    resolvePath: () => '',
+    readExternalFile: () => '',
+  });
+  // Get patches for the page file (only one for non-multifile edits in 1.B/1.C tests).
+  const patches = planned.find((p) => p.filePath === input.filePath)?.patches ?? [];
   const applied = apply(instrumented, patches);
   const after = input.mutateAfter ? input.mutateAfter(applied.after) : applied.after;
 

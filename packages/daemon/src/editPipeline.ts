@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync, openSync, fsyncSync, closeSync, renameSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
 import {
   instrument,
@@ -89,7 +90,16 @@ export class EditPipeline {
 
   async planAndApply(edits: Edit[]): Promise<DryRunArtifact> {
     const snap = await this.getSnapshot();
-    const patches = planEdits(snap.sourceText, snap.sourceMap, edits);
+    const planned = planEdits({
+      filePath: this.opts.filePath,
+      source: snap.sourceText,
+      sourceMap: snap.sourceMap,
+      edits,
+      resolvePath: (importPath) => resolve(dirname(this.opts.filePath), importPath),
+      readExternalFile: (absPath) => readFileSync(absPath, 'utf8'),
+    });
+    // For now, only handle single-file (page file) — multi-file lands in Task 6.
+    const patches = planned.find((p) => p.filePath === this.opts.filePath)?.patches ?? [];
     const applied = apply(snap.sourceText, patches);
     const planId = randomBytes(4).toString('hex');
     const artifact: DryRunArtifact = {

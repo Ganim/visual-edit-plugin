@@ -10,7 +10,7 @@ export type {
   TextPatch,
   InstrumentResult,
 } from './types.js';
-export { planEdits } from './planEdits.js';
+export { planEdits, type PlanEditsInput, type PlannedFile } from './planEdits.js';
 export { apply, type ApplyResult } from './apply.js';
 export { assertEditEquivalence } from './invariants/astEquivalence.js';
 export { assertCommentsPreserved } from './invariants/commentPreservation.js';

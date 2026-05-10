@@ -1,15 +1,40 @@
 import { CODES, VisualEditError, makeEnvelope } from '@visual-edit/diagnostics';
 import type { Edit } from '@visual-edit/shared';
 import type { ElementSourceMap, ElementSourceMapEntry, TextPatch } from './types.js';
+import { findCssRuleRange } from './cssModuleParser.js';
 
-export function planEdits(
-  source: string,
-  sourceMap: ElementSourceMap,
-  edits: Edit[],
-): TextPatch[] {
-  const patches: TextPatch[] = [];
-  for (const edit of edits) {
-    const entry = sourceMap[edit.element];
+export interface PlannedFile {
+  filePath: string;
+  patches: TextPatch[];
+}
+
+export interface PlanEditsInput {
+  /** The file being instrumented (e.g. Home.tsx). */
+  filePath: string;
+  source: string;
+  sourceMap: ElementSourceMap;
+  edits: Edit[];
+  /**
+   * Resolves the absolute path of an external file from a sourceMap entry's import path.
+   * For CSS Modules: `cssModule.importPath` (relative) → absolute path of the `.module.css`.
+   * Caller is responsible for path resolution; planEdits stays I/O-free.
+   */
+  resolvePath: (importPath: string) => string;
+  /** Reads the content of an external file (e.g. the .module.css source). I/O lives in caller. */
+  readExternalFile: (absPath: string) => string;
+}
+
+export function planEdits(input: PlanEditsInput): PlannedFile[] {
+  // Group results by file path; the page file is the default target for className/style edits.
+  const byFile = new Map<string, TextPatch[]>();
+
+  const ensureFile = (filePath: string): TextPatch[] => {
+    if (!byFile.has(filePath)) byFile.set(filePath, []);
+    return byFile.get(filePath)!;
+  };
+
+  for (const edit of input.edits) {
+    const entry = input.sourceMap[edit.element];
     if (!entry) {
       throw new VisualEditError(makeEnvelope({
         code: CODES.VE_CODEMOD_001_UNKNOWN_VID,
@@ -20,20 +45,52 @@ export function planEdits(
         hint: 'Re-instrument the file (editor is in a stale state).',
       }));
     }
+
     if (edit.kind === 'className') {
-      patches.push(planClassNameEdit(entry, edit.newValue));
+      ensureFile(input.filePath).push(planClassNameEdit(entry, edit.newValue));
     } else if (edit.kind === 'style') {
-      patches.push(planStyleEdit(entry, edit.newObjectText));
-    } else if (edit.kind === 'css-module' || edit.kind === 'styled-prop') {
-      // CSS Module and styled-prop edits are handled by the multi-file pipeline (Task 4+).
-      // planEdits only handles single-file edits; throw a clear error for now.
-      throw new Error(`planEdits: edit kind '${edit.kind}' requires multi-file pipeline — use planMultiFileEdits`);
+      ensureFile(input.filePath).push(planStyleEdit(entry, edit.newObjectText));
+    } else if (edit.kind === 'css-module') {
+      if (!entry.cssModule) {
+        throw new VisualEditError(makeEnvelope({
+          code: CODES.VE_CODEMOD_001_UNKNOWN_VID,
+          message: `[VE_CODEMOD_001]: planEdits: element '${edit.element}' has no CSS Module binding`,
+          severity: 'error',
+          recovery: 'user-action',
+          blame: 'tool',
+          hint: 'The element must have a className={styles.X} expression bound to a .module.css import.',
+        }));
+      }
+      const absPath = input.resolvePath(entry.cssModule.importPath);
+      const cssSource = input.readExternalFile(absPath);
+      const range = findCssRuleRange(cssSource, edit.binding);
+      ensureFile(absPath).push({
+        start: range.bodyStart,
+        end: range.bodyEnd,
+        replacement: ` ${edit.newRuleBody} `,
+        reason: `css-module rule update for .${edit.binding} in ${absPath}`,
+      });
+    } else if (edit.kind === 'styled-prop') {
+      // Task 7-8 wires this. For now, refuse — styledComponent is always null after Task 1.
+      if (!entry.styledComponent) {
+        throw new VisualEditError(makeEnvelope({
+          code: CODES.VE_CODEMOD_001_UNKNOWN_VID,
+          message: `[VE_CODEMOD_001]: planEdits: element '${edit.element}' has no styled-component binding (styled-prop edit requires Task 7+)`,
+          severity: 'error',
+          recovery: 'user-action',
+          blame: 'tool',
+          hint: 'styled-prop edit target is not yet implemented for this element.',
+        }));
+      }
+      // placeholder — Task 7 will implement full styled-prop patch
+      throw new Error('planEdits: styled-prop edit not yet implemented');
     } else {
       const _exhaustive: never = edit;
       throw new Error(`planEdits: unsupported edit kind: ${JSON.stringify(_exhaustive)}`);
     }
   }
-  return patches;
+
+  return Array.from(byFile.entries()).map(([filePath, patches]) => ({ filePath, patches }));
 }
 
 function planClassNameEdit(entry: ElementSourceMapEntry, newValue: string): TextPatch {

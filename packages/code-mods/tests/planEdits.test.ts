@@ -9,7 +9,11 @@ describe('planEdits', () => {
     const { instrumented, sourceMap } = instrument(src, 'X.tsx');
     const vid = Object.keys(sourceMap)[0]!;
     const edits: Edit[] = [{ kind: 'className', element: vid, newValue: 'text-red-500' }];
-    const patches = planEdits(instrumented, sourceMap, edits);
+    const result = planEdits({
+      filePath: 'X.tsx', source: instrumented, sourceMap, edits,
+      resolvePath: () => '', readExternalFile: () => '',
+    });
+    const patches = result.find((f) => f.filePath === 'X.tsx')!.patches;
     expect(patches).toHaveLength(1);
     expect(patches[0]!.replacement).toBe('text-red-500');
     const before = sourceMap[vid]!.classNameAttr!;
@@ -21,9 +25,12 @@ describe('planEdits', () => {
     const src = `export const X = () => <div>hi</div>;\n`;
     const { instrumented, sourceMap } = instrument(src, 'X.tsx');
     const vid = Object.keys(sourceMap)[0]!;
-    const patches = planEdits(instrumented, sourceMap, [
-      { kind: 'className', element: vid, newValue: 'p-4' },
-    ]);
+    const result = planEdits({
+      filePath: 'X.tsx', source: instrumented, sourceMap,
+      edits: [{ kind: 'className', element: vid, newValue: 'p-4' }],
+      resolvePath: () => '', readExternalFile: () => '',
+    });
+    const patches = result.find((f) => f.filePath === 'X.tsx')!.patches;
     expect(patches[0]!.replacement).toBe(' className="p-4"');
   });
 
@@ -31,9 +38,12 @@ describe('planEdits', () => {
     const src = `export const X = () => <div style={{ color: 'blue' }}>hi</div>;\n`;
     const { instrumented, sourceMap } = instrument(src, 'X.tsx');
     const vid = Object.keys(sourceMap)[0]!;
-    const patches = planEdits(instrumented, sourceMap, [
-      { kind: 'style', element: vid, newObjectText: "{ color: 'red' }" },
-    ]);
+    const result = planEdits({
+      filePath: 'X.tsx', source: instrumented, sourceMap,
+      edits: [{ kind: 'style', element: vid, newObjectText: "{ color: 'red' }" }],
+      resolvePath: () => '', readExternalFile: () => '',
+    });
+    const patches = result.find((f) => f.filePath === 'X.tsx')!.patches;
     expect(patches[0]!.replacement).toBe("style={{ color: 'red' }}");
   });
 
@@ -41,9 +51,11 @@ describe('planEdits', () => {
     const src = `export const X = () => <div>hi</div>;\n`;
     const { instrumented, sourceMap } = instrument(src, 'X.tsx');
     expect(() =>
-      planEdits(instrumented, sourceMap, [
-        { kind: 'className', element: 'deadbeef', newValue: 'x' },
-      ]),
+      planEdits({
+        filePath: 'X.tsx', source: instrumented, sourceMap,
+        edits: [{ kind: 'className', element: 'deadbeef', newValue: 'x' }],
+        resolvePath: () => '', readExternalFile: () => '',
+      }),
     ).toThrow(/VE_CODEMOD_001/);
   });
 
@@ -51,10 +63,15 @@ describe('planEdits', () => {
     const src = `export const X = () => <div className="a"><span className="b" /></div>;\n`;
     const { instrumented, sourceMap } = instrument(src, 'X.tsx');
     const [vid1, vid2] = Object.keys(sourceMap);
-    const patches = planEdits(instrumented, sourceMap, [
-      { kind: 'className', element: vid1!, newValue: 'A' },
-      { kind: 'className', element: vid2!, newValue: 'B' },
-    ]);
+    const result = planEdits({
+      filePath: 'X.tsx', source: instrumented, sourceMap,
+      edits: [
+        { kind: 'className', element: vid1!, newValue: 'A' },
+        { kind: 'className', element: vid2!, newValue: 'B' },
+      ],
+      resolvePath: () => '', readExternalFile: () => '',
+    });
+    const patches = result.find((f) => f.filePath === 'X.tsx')!.patches;
     expect(patches).toHaveLength(2);
     expect(patches.map((p) => p.replacement).sort()).toEqual(['A', 'B']);
   });
