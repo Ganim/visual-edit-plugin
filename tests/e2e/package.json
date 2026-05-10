@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@visual-edit/daemon": "*",
-    "@visual-edit/code-mods": "*"
+    "@visual-edit/code-mods": "*",
+    "@visual-edit/project-analyzer": "*"
   }
 }
