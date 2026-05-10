@@ -4,6 +4,7 @@ export {
   OpenPreviewResponse,
   ClosePreviewRequest,
   StatusResponse,
+  RollbackRequest,
 } from './http.js';
 export {
   WsHelloMessage,

@@ -5,6 +5,7 @@ import { CODES, VisualEditError, makeEnvelope } from '@visual-edit/diagnostics';
 import { analyze, loadConfig, findRoutes, discoverSchemas } from '@visual-edit/project-analyzer';
 import type { ProjectInfo } from '@visual-edit/shared';
 import type { AdapterInput } from '@visual-edit/adapter-vite';
+import { readCommitLog, rollback as codeModsRollback } from '@visual-edit/code-mods';
 import { writeLock, removeLock, readLock } from './lockFile.js';
 import { findFreePort } from './portFinder.js';
 import { PreviewSupervisor } from './previewSupervisor.js';
@@ -70,6 +71,7 @@ export class Daemon {
       openPreview: this.openPreview.bind(this),
       closePreview: this.closePreview.bind(this),
       getStatus: this.getStatus.bind(this),
+      rollback: this.rollback.bind(this),
       ...(this.opts.editorAssetsRoot !== undefined ? { editorAssetsRoot: this.opts.editorAssetsRoot } : {}),
     });
     this.wsServer = attachWebSocket(this.httpServer, {
@@ -171,6 +173,21 @@ export class Daemon {
       activePreviews: this.supervisor.list().length,
       workerHealth: {},
     };
+  }
+
+  async rollback(req: { commitId: string }): Promise<void> {
+    const log = readCommitLog(this.opts.root);
+    const entry = log.find((e) => e.commitId === req.commitId && e.kind === 'commit');
+    if (!entry) throw new Error(`unknown commitId ${req.commitId}`);
+    // Find the pipeline whose file matches.
+    for (const pipeline of this.editPipelines.values()) {
+      if (pipeline.getFilePath() === entry.filePath) {
+        await pipeline.rollback(req.commitId);
+        return;
+      }
+    }
+    // No active pipeline — perform a one-shot rollback.
+    await codeModsRollback({ root: this.opts.root, commitId: req.commitId });
   }
 }
 

@@ -3,6 +3,7 @@ import {
   OpenPreviewResponse,
   ClosePreviewRequest,
   StatusResponse,
+  RollbackRequest,
 } from '@visual-edit/protocol';
 
 export class DaemonClient {
@@ -25,6 +26,16 @@ export class DaemonClient {
     const resp = await fetch(`${this.baseUrl}/status`);
     if (!resp.ok) throw new Error(`daemon ${resp.status}: ${await resp.text()}`);
     return StatusResponse.parse(await resp.json());
+  }
+
+  async rollback(commitId: string): Promise<void> {
+    const body: RollbackRequest = { commitId };
+    const resp = await fetch(`${this.baseUrl}/rollback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok && resp.status !== 204) throw new Error(`daemon ${resp.status}: ${await resp.text()}`);
   }
 
   private async post<TIn, TOut>(

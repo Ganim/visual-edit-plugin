@@ -33,6 +33,15 @@ export function registerTools(server: Server, daemonUrl: string): void {
         description: 'Return daemon status: version, uptime, active previews.',
         inputSchema: { type: 'object', properties: {} },
       },
+      {
+        name: 'rollback',
+        description: 'Restore a file to its pre-commit content using the commit id from a prior visual-edit commit.',
+        inputSchema: {
+          type: 'object',
+          required: ['commitId'],
+          properties: { commitId: { type: 'string', description: 'The commit id to roll back' } },
+        },
+      },
     ],
   }));
 
@@ -51,6 +60,10 @@ export function registerTools(server: Server, daemonUrl: string): void {
     if (name === 'get_status') {
       const status = await client.getStatus();
       return { content: [{ type: 'text', text: JSON.stringify(status) }] };
+    }
+    if (name === 'rollback') {
+      await client.rollback(args.commitId as string);
+      return { content: [{ type: 'text', text: `rolled back commit ${args.commitId as string}` }] };
     }
     throw new Error(`unknown tool: ${name}`);
   });

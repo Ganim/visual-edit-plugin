@@ -7,12 +7,14 @@ import {
   OpenPreviewResponse,
   ClosePreviewRequest,
   StatusResponse,
+  RollbackRequest,
 } from '@visual-edit/protocol';
 
 export interface HttpHandlers {
   openPreview: (req: OpenPreviewRequest) => Promise<OpenPreviewResponse>;
   closePreview: (req: ClosePreviewRequest) => Promise<void>;
   getStatus: () => Promise<StatusResponse>;
+  rollback: (req: RollbackRequest) => Promise<void>;
   /** Absolute path to a directory containing editor-ui's static build (index.html etc.). */
   editorAssetsRoot?: string;
 }
@@ -51,6 +53,10 @@ export function createHttpServer(handlers: HttpHandlers): Server {
       } else if (req.method === 'GET' && req.url === '/status') {
         const status = await handlers.getStatus();
         send(200, status);
+      } else if (req.method === 'POST' && req.url === '/rollback') {
+        const parsed = RollbackRequest.parse(body);
+        await handlers.rollback(parsed);
+        send(204, null);
       } else {
         send(404, { error: 'not found' });
       }

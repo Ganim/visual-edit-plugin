@@ -25,3 +25,6 @@ export const StatusResponse = z.object({
   workerHealth: z.record(z.string(), z.enum(['ok', 'degraded', 'down'])),
 });
 export type StatusResponse = z.infer<typeof StatusResponse>;
+
+export const RollbackRequest = z.object({ commitId: z.string().min(1) });
+export type RollbackRequest = z.infer<typeof RollbackRequest>;
