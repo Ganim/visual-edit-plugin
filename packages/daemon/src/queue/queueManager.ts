@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { CODES, VisualEditError, makeEnvelope } from '@visual-edit/diagnostics';
 import { appendWalEntry } from './wal.js';
 import { replayWal } from './replay.js';
 import type { AskAIItem, AskAIOutcome } from './types.js';
@@ -85,10 +86,22 @@ export class QueueManager {
 
   resolve(input: ResolveInput): AskAIItem {
     const item = this.items.get(input.askId);
-    if (!item) throw new Error(`[VE_QUEUE_001]: unknown askId ${input.askId}`);
+    if (!item) throw new VisualEditError(makeEnvelope({
+      code: CODES.VE_QUEUE_001_UNKNOWN_ASK,
+      message: `[VE_QUEUE_001]: unknown askId ${input.askId}`,
+      severity: 'error', recovery: 'none', blame: 'user-code',
+    }));
     if (item.state === 'resolved') return item; // idempotent
-    if (item.state !== 'leased') throw new Error(`[VE_QUEUE_002]: askId ${input.askId} is not leased (state=${item.state})`);
-    if (item.leaseId !== input.leaseId) throw new Error(`[VE_QUEUE_003]: lease mismatch for ${input.askId}`);
+    if (item.state !== 'leased') throw new VisualEditError(makeEnvelope({
+      code: CODES.VE_QUEUE_002_NOT_LEASED,
+      message: `[VE_QUEUE_002]: askId ${input.askId} is not leased (state=${item.state})`,
+      severity: 'error', recovery: 'none', blame: 'user-code',
+    }));
+    if (item.leaseId !== input.leaseId) throw new VisualEditError(makeEnvelope({
+      code: CODES.VE_QUEUE_003_LEASE_MISMATCH,
+      message: `[VE_QUEUE_003]: lease mismatch for ${input.askId}`,
+      severity: 'error', recovery: 'none', blame: 'user-code',
+    }));
     const timestamp = new Date().toISOString();
     appendWalEntry(this.root, {
       op: 'resolve',
