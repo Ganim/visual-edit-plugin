@@ -24,6 +24,7 @@ export {
   WsAskAIQueuedMessage,
   WsAskAIResolvedMessage,
   WsConfigChangedMessage,
+  WsPreviewCrashedMessage,
   WsMessage,
 } from './ws.js';
 export type { ElementSourceMap } from './ws.js';
@@ -31,5 +32,6 @@ export {
   IpcStartMessage,
   IpcReadyMessage,
   IpcErrorMessage,
+  IpcHeartbeatMessage,
   IpcMessage,
 } from './ipc.js';

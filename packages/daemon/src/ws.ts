@@ -14,6 +14,7 @@ import {
   type WsAskAIQueuedMessage,
   type WsAskAIResolvedMessage,
   type WsConfigChangedMessage,
+  type WsPreviewCrashedMessage,
 } from '@visual-edit/protocol';
 import type { PreviewSession } from '@visual-edit/shared';
 import type { EditPipeline } from './editPipeline.js';
@@ -204,6 +205,17 @@ export function broadcastAskAIResolved(wss: WebSocketServer, msg: Omit<WsAskAIRe
  */
 export function broadcastConfigChanged(wss: WebSocketServer): void {
   const wire: WsConfigChangedMessage = { kind: 'config-changed', sessionId: '*', willRestart: true };
+  const payload = JSON.stringify(wire);
+  for (const client of wss.clients) {
+    if (client.readyState === client.OPEN) client.send(payload);
+  }
+}
+
+/**
+ * Broadcast a preview-crashed event to all WS clients when a session's heartbeat goes stale.
+ */
+export function broadcastPreviewCrashed(wss: WebSocketServer, msg: Omit<WsPreviewCrashedMessage, 'kind'>): void {
+  const wire: WsPreviewCrashedMessage = { kind: 'preview-crashed', ...msg };
   const payload = JSON.stringify(wire);
   for (const client of wss.clients) {
     if (client.readyState === client.OPEN) client.send(payload);

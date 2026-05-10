@@ -2,6 +2,7 @@ import { fork, type ChildProcess } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { EventEmitter } from 'node:events';
 import type { AdapterInput } from '@visual-edit/adapter-vite';
 import type { IpcMessage } from '@visual-edit/protocol';
 import type { PreviewSession } from '@visual-edit/shared';
@@ -33,8 +34,29 @@ export interface SupervisedSession {
   previewDir: string;
 }
 
-export class PreviewSupervisor {
+export class PreviewSupervisor extends EventEmitter {
   private sessions = new Map<string, SupervisedSession>();
+  private lastHeartbeat = new Map<string, number>();
+  private staleTimer?: ReturnType<typeof setInterval>;
+
+  constructor() {
+    super();
+    this.staleTimer = setInterval(() => {
+      const now = Date.now();
+      for (const [sessionId, last] of this.lastHeartbeat) {
+        if (now - last > 15_000) {
+          this.lastHeartbeat.delete(sessionId);
+          this.emit('preview-stale', sessionId);
+        }
+      }
+    }, 5_000);
+    this.staleTimer.unref?.();
+  }
+
+  /** Record a heartbeat (or ready) for the given session. */
+  public recordHeartbeat(sessionId: string): void {
+    this.lastHeartbeat.set(sessionId, Date.now());
+  }
 
   async spawn(sessionId: string, input: AdapterInput): Promise<PreviewSession> {
     const child = fork(workerEntry(), [], {
@@ -58,6 +80,7 @@ export class PreviewSupervisor {
       child.on('message', (raw: unknown) => {
         const msg = raw as IpcMessage;
         if (msg.kind === 'ready') {
+          this.recordHeartbeat(sessionId);
           settle(() => {
             clearTimeout(timeout);
             const session: PreviewSession = {
@@ -76,6 +99,8 @@ export class PreviewSupervisor {
             clearTimeout(timeout);
             rejectSession(new Error(`worker error: ${msg.message}`));
           });
+        } else if (msg.kind === 'heartbeat') {
+          this.recordHeartbeat(sessionId);
         }
       });
 
@@ -102,6 +127,7 @@ export class PreviewSupervisor {
   async stop(sessionId: string): Promise<void> {
     const s = this.sessions.get(sessionId);
     if (!s) return;
+    this.lastHeartbeat.delete(sessionId);
     s.child.kill('SIGTERM');
     await new Promise((r) => setTimeout(r, 500));
     if (!s.child.killed) s.child.kill('SIGKILL');
@@ -115,6 +141,11 @@ export class PreviewSupervisor {
   }
 
   async stopAll(): Promise<void> {
+    if (this.staleTimer) {
+      clearInterval(this.staleTimer);
+      // exactOptionalPropertyTypes requires delete rather than assigning undefined
+      delete (this as unknown as Record<string, unknown>)['staleTimer'];
+    }
     await Promise.all([...this.sessions.keys()].map((id) => this.stop(id)));
   }
 }

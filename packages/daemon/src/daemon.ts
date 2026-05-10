@@ -12,7 +12,7 @@ import { LockHeartbeat } from './lockHeartbeat.js';
 import { findFreePort } from './portFinder.js';
 import { PreviewSupervisor } from './previewSupervisor.js';
 import { createHttpServer } from './http.js';
-import { attachWebSocket, broadcastFileChanged, broadcastAskAIResolved, broadcastConfigChanged } from './ws.js';
+import { attachWebSocket, broadcastFileChanged, broadcastAskAIResolved, broadcastConfigChanged, broadcastPreviewCrashed } from './ws.js';
 import { ConfigReloader, type ConfigChangedEvent } from './configReloader.js';
 import { EditPipeline } from './editPipeline.js';
 import { FileWatcher } from './fileWatcher.js';
@@ -217,6 +217,13 @@ export class Daemon {
     this.heartbeat.start();
 
     this.leaseTimer!.start();
+
+    this.supervisor.on('preview-stale', (sessionId: string) => {
+      if (this.wsServer) {
+        broadcastPreviewCrashed(this.wsServer, { sessionId, reason: 'heartbeat-stale', willRespawn: false });
+      }
+      this.logger.warn('preview heartbeat stale', { sessionId, reason: 'heartbeat-stale' });
+    });
 
     this.logger.info('daemon started', { port, root: this.opts.root, pid: process.pid });
 

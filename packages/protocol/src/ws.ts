@@ -178,6 +178,14 @@ export const WsConfigChangedMessage = z.object({
 });
 export type WsConfigChangedMessage = z.infer<typeof WsConfigChangedMessage>;
 
+export const WsPreviewCrashedMessage = z.object({
+  kind: z.literal('preview-crashed'),
+  sessionId: z.string().min(1),
+  reason: z.enum(['heartbeat-stale', 'exit', 'error']),
+  willRespawn: z.boolean(),
+});
+export type WsPreviewCrashedMessage = z.infer<typeof WsPreviewCrashedMessage>;
+
 export const WsMessage = z.union([
   WsHelloMessage,
   WsSnapshotMessage,
@@ -193,6 +201,7 @@ export const WsMessage = z.union([
   WsAskAIQueuedMessage,
   WsAskAIResolvedMessage,
   WsConfigChangedMessage,
+  WsPreviewCrashedMessage,
 ]);
 export type WsMessage = z.infer<typeof WsMessage>;
 

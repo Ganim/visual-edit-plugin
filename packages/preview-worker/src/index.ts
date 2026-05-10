@@ -43,6 +43,9 @@ async function main(): Promise<void> {
 
     const h = await handle;
     sendToParent(process, { kind: 'ready', url: h.url, ephemeralDir: generated.ephemeralDir });
+    setInterval(() => {
+      sendToParent(process, { kind: 'heartbeat', ts: new Date().toISOString() });
+    }, 5000).unref?.();
   } catch (err) {
     const e = err as Error;
     sendToParent(process, { kind: 'error', message: e.message, stack: e.stack });

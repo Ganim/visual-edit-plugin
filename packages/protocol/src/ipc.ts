@@ -21,5 +21,11 @@ export const IpcErrorMessage = z.object({
 });
 export type IpcErrorMessage = z.infer<typeof IpcErrorMessage>;
 
-export const IpcMessage = z.union([IpcStartMessage, IpcReadyMessage, IpcErrorMessage]);
+export const IpcHeartbeatMessage = z.object({
+  kind: z.literal('heartbeat'),
+  ts: z.string(),
+});
+export type IpcHeartbeatMessage = z.infer<typeof IpcHeartbeatMessage>;
+
+export const IpcMessage = z.union([IpcStartMessage, IpcReadyMessage, IpcErrorMessage, IpcHeartbeatMessage]);
 export type IpcMessage = z.infer<typeof IpcMessage>;
