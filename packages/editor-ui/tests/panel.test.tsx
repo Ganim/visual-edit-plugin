@@ -33,4 +33,14 @@ describe('PropertiesPanel', () => {
     fireEvent.keyDown(window, { key: 's', ctrlKey: true });
     expect(send.sendCommit).toHaveBeenCalledWith('p1');
   });
+
+  it('Apply style sends an edit message with color + padding object text', () => {
+    useStore.setState({ ...useStore.getInitialState(), selectedVid: 'abc12345' });
+    const send = { sendEdit: vi.fn(() => 'r1'), sendCommit: vi.fn(() => 'r2'), close: vi.fn() } as never;
+    render(<PropertiesPanel client={send} />);
+    fireEvent.click(screen.getByTestId('apply-style'));
+    expect(send.sendEdit).toHaveBeenCalledWith([
+      expect.objectContaining({ kind: 'style', element: 'abc12345', newObjectText: expect.stringContaining('color: ') }),
+    ]);
+  });
 });
