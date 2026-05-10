@@ -81,5 +81,27 @@ describe('asset strategies', () => {
       expect(r.status).toBe(200);
       fetchSpy.mockRestore();
     });
+
+    it('pass-through blocks IPv6 loopback [::1]', async () => {
+      const r = await passThrough({ url: 'http://[::1]/', cache: new Map() });
+      expect(r.status).toBe(403);
+      expect(r.body).toMatch(/blocked unsafe URL/);
+    });
+
+    it('pass-through blocks IPv6 unique local [fd00::1]', async () => {
+      const r = await passThrough({ url: 'http://[fd00::1]/', cache: new Map() });
+      expect(r.status).toBe(403);
+    });
+
+    it('pass-through blocks IPv6 link-local [fe80::1]', async () => {
+      const r = await passThrough({ url: 'http://[fe80::1]/', cache: new Map() });
+      expect(r.status).toBe(403);
+    });
+
+    it('pass-through blocks IPv4-mapped loopback [::ffff:127.0.0.1]', async () => {
+      // ::ffff:127.0.0.1 in pure numeric form is ::ffff:7f00:1
+      const r = await passThrough({ url: 'http://[::ffff:7f00:1]/', cache: new Map() });
+      expect(r.status).toBe(403);
+    });
   });
 });

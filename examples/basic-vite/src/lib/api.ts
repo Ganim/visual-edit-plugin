@@ -12,10 +12,12 @@ async function fetchUser(): Promise<User> {
     if (!resp.ok) throw new Error(`fetch /api/users/me returned ${resp.status}`);
     return User.parse(await resp.json());
   } catch {
-    const mocks = (globalThis as Record<string, unknown>).__VE_MOCKS as
-      | { makeUser?: () => unknown }
-      | undefined;
-    if (mocks?.makeUser) return User.parse(mocks.makeUser());
+    if (import.meta.env.DEV && (globalThis as Record<string, unknown>).__VE_MOCKS) {
+      const mocks = (globalThis as Record<string, unknown>).__VE_MOCKS as
+        | { makeUser?: () => unknown }
+        | undefined;
+      if (mocks?.makeUser) return User.parse(mocks.makeUser());
+    }
     throw new Error('fetchUser: fetch failed and no __VE_MOCKS.makeUser fallback');
   }
 }

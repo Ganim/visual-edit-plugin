@@ -32,4 +32,10 @@ describe('findCssRuleRange', () => {
     const css = `.titles { color: red; }`;
     expect(() => findCssRuleRange(css, 'title')).toThrow(/VE_CSSMOD_002/);
   });
+
+  it('handles rule body with comment containing braces', () => {
+    const css = `.title { /* example: { color: red; } */ color: blue; }`;
+    const r = findCssRuleRange(css, 'title');
+    expect(r.body).toContain('color: blue;');
+  });
 });

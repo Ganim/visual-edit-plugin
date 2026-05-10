@@ -96,6 +96,11 @@ export function instrument(source: string, filePath: string): InstrumentResult {
  *
  * Returns a Map from component name → StyledComponentRange (positions of the
  * template literal content — between the backticks, exclusive).
+ *
+ * NOTE (1.G limitation): chained patterns like `styled.button.attrs(...)` and
+ * `styled(Base).withConfig(...)` are NOT detected and return null. Edits on these
+ * components will surface as VE_STYLED_001_CROSS_FILE which is misleading. A future
+ * VE_STYLED_003_UNSUPPORTED_PATTERN should distinguish the case.
  */
 export function findStyledComponents(sf: ts.SourceFile): Map<string, StyledComponentRange> {
   const result = new Map<string, StyledComponentRange>();

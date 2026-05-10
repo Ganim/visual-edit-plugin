@@ -60,9 +60,36 @@ describe('ws editing schemas', () => {
       status: 'ready',
       filePath: '/abs/Home.tsx',
       sourceText: 'export const X = () => <div />;\n',
-      sourceMap: { abc12345: { vid: 'abc12345', tagName: 'div', nodeStart: 0, nodeEnd: 10, openingTagEnd: 5, classNameAttr: null, styleAttr: null, attrsInsertPos: 5 } },
+      sourceMap: { abc12345: { vid: 'abc12345', tagName: 'div', nodeStart: 0, nodeEnd: 10, openingTagEnd: 5, classNameAttr: null, styleAttr: null, attrsInsertPos: 5, cssModule: null, styledComponent: null } },
       editorUrl: 'http://127.0.0.1:5170/__editor/?session=s1',
     });
     expect(m.sourceMap['abc12345']!.tagName).toBe('div');
+  });
+
+  it('snapshot sourceMap entry accepts non-null cssModule and styledComponent', () => {
+    const m = WsSnapshotMessage.parse({
+      kind: 'snapshot',
+      sessionId: 's2',
+      url: 'http://127.0.0.1:5180',
+      status: 'ready',
+      filePath: '/abs/Card.tsx',
+      sourceText: 'export const Card = () => <div className={styles.card} />;\n',
+      sourceMap: {
+        def12345: {
+          vid: 'def12345',
+          tagName: 'div',
+          nodeStart: 0,
+          nodeEnd: 20,
+          openingTagEnd: 15,
+          classNameAttr: null,
+          styleAttr: null,
+          attrsInsertPos: 15,
+          cssModule: { importedAs: 'styles', importPath: './Card.module.css', binding: 'card' },
+          styledComponent: null,
+        },
+      },
+      editorUrl: 'http://127.0.0.1:5170/__editor/?session=s2',
+    });
+    expect(m.sourceMap['def12345']!.cssModule?.binding).toBe('card');
   });
 });

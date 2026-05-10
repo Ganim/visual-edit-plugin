@@ -49,6 +49,13 @@ export function findCssRuleRange(source: string, binding: string): CssRuleRange 
     let depth = 1;
     let i = bodyStart;
     while (i < source.length && depth > 0) {
+      // Skip CSS comments — they may contain `{` or `}` which must not affect depth.
+      if (source[i] === '/' && source[i + 1] === '*') {
+        const end = source.indexOf('*/', i + 2);
+        if (end < 0) break; // unclosed comment — bail; will trigger unbalanced-braces error
+        i = end + 2;
+        continue;
+      }
       const ch = source[i]!;
       if (ch === '{') depth++;
       else if (ch === '}') depth--;
@@ -63,8 +70,10 @@ export function findCssRuleRange(source: string, binding: string): CssRuleRange 
     }
     const bodyEnd = i - 1; // position OF the closing `}`
     const body = source.slice(bodyStart, bodyEnd);
-    // Reject nested-rule body for 1.F.
-    if (body.includes('{')) {
+    // Reject nested-rule body for 1.F. Strip comments first so that `{ }` inside a
+    // comment (e.g. `/* example: { color: red; } */`) does not trigger a false positive.
+    const bodyWithoutComments = body.replace(/\/\*[\s\S]*?\*\//g, '');
+    if (bodyWithoutComments.includes('{')) {
       throw new VisualEditError(makeEnvelope({
         code: CODES.VE_CSSMOD_001_NESTED_RULE,
         message: `[VE_CSSMOD_001]: '.${binding}' contains nested rules`,

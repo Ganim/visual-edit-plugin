@@ -10,12 +10,18 @@ function isSafeUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
-    const host = parsed.hostname;
+    // Strip brackets from IPv6 hostname (URL.hostname returns "[::1]" with brackets).
+    const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
     if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return false;
     if (/^10\./.test(host)) return false;
     if (/^172\.(1[6-9]|2[0-9]|3[01])\./.test(host)) return false;
     if (/^192\.168\./.test(host)) return false;
     if (/^169\.254\./.test(host)) return false;
+    // IPv6 unique local addresses (fc00::/7) and link-local (fe80::/10).
+    if (/^f[cd][0-9a-f]{2}:/.test(host)) return false;
+    if (/^fe[89ab][0-9a-f]:/.test(host)) return false;
+    // IPv4-mapped loopback (::ffff:127.0.0.1).
+    if (/^::ffff:7f[0-9a-f]{2}:/.test(host)) return false;
     return true;
   } catch { return false; }
 }

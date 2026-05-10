@@ -2,6 +2,7 @@ import {
   readFileSync,
   writeFileSync,
   renameSync,
+  unlinkSync,
   openSync,
   fsyncSync,
   closeSync,
@@ -159,93 +160,100 @@ export async function commitMultiFile(input: MultiFileCommitInput): Promise<Mult
 
   // Phase 3: write all .tmp files + fsync.
   const tmpPaths: string[] = [];
-  for (const f of input.files) {
-    const tmp = `${f.filePath}.${commitId}.tmp`;
-    writeFileSync(tmp, f.newContent, 'utf8');
-    const fd = openSync(tmp, 'r+');
-    try { fsyncSync(fd); } finally { closeSync(fd); }
-    tmpPaths.push(tmp);
-  }
-
-  // Phase 4: rename in order. On any failure, revert renamed files using backups.
-  const renamed: string[] = [];
-  let lastError: string | undefined;
-  let renameSuccess = true;
-
-  for (let i = 0; i < input.files.length; i++) {
-    const f = input.files[i]!;
-    try {
-      renameFn(tmpPaths[i]!, f.filePath);
-      renamed.push(f.filePath);
-    } catch (err) {
-      lastError = `${(err as NodeJS.ErrnoException).code ?? 'ERR'}: ${(err as Error).message}`;
-      renameSuccess = false;
-      break;
+  try {
+    for (const f of input.files) {
+      const tmp = `${f.filePath}.${commitId}.tmp`;
+      writeFileSync(tmp, f.newContent, 'utf8');
+      const fd = openSync(tmp, 'r+');
+      try { fsyncSync(fd); } finally { closeSync(fd); }
+      tmpPaths.push(tmp);
     }
-  }
 
-  if (!renameSuccess) {
-    // Revert renamed files using backups (best-effort).
-    for (const filePath of renamed) {
+    // Phase 4: rename in order. On any failure, revert renamed files using backups.
+    const renamed: string[] = [];
+    let lastError: string | undefined;
+    let renameSuccess = true;
+
+    for (let i = 0; i < input.files.length; i++) {
+      const f = input.files[i]!;
       try {
-        const backupContent = readBackup({ root: input.root, filePath, commitId });
-        writeFileSync(filePath, backupContent, 'utf8');
-      } catch { /* best-effort revert */ }
+        renameFn(tmpPaths[i]!, f.filePath);
+        renamed.push(f.filePath);
+      } catch (err) {
+        lastError = `${(err as NodeJS.ErrnoException).code ?? 'ERR'}: ${(err as Error).message}`;
+        renameSuccess = false;
+        break;
+      }
     }
+
+    if (!renameSuccess) {
+      // Revert renamed files using backups (best-effort).
+      for (const filePath of renamed) {
+        try {
+          const backupContent = readBackup({ root: input.root, filePath, commitId });
+          writeFileSync(filePath, backupContent, 'utf8');
+        } catch { /* best-effort revert */ }
+      }
+      return {
+        commitId,
+        files: input.files.map((f) => ({
+          filePath: f.filePath,
+          sha256Before: sha(readFileSync(f.filePath, 'utf8')),
+          sha256After: sha(f.newContent),
+          status: 'reverted' as const,
+        })),
+        status: 'commit-uncertain',
+        retries: 0,
+        lastError: lastError ?? 'unknown',
+      };
+    }
+
+    // Phase 5: verify all files match expected new sha.
+    for (const f of input.files) {
+      const verify = sha(readFileSync(f.filePath, 'utf8'));
+      if (verify !== sha(f.newContent)) {
+        return {
+          commitId,
+          files: input.files.map((g) => ({
+            filePath: g.filePath,
+            sha256Before: g.expectedBeforeHash,
+            sha256After: sha(g.newContent),
+            status: 'commit-uncertain' as const,
+          })),
+          status: 'commit-uncertain',
+          retries: 0,
+          lastError: `verify-mismatch on ${f.filePath}`,
+        };
+      }
+    }
+
+    // Phase 6: append per-file commit log entries (one per file, shared commitId).
+    for (const f of input.files) {
+      appendCommit(input.root, {
+        commitId,
+        filePath: f.filePath,
+        sha256Before: f.expectedBeforeHash,
+        sha256After: sha(f.newContent),
+        kind: 'commit',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     return {
       commitId,
       files: input.files.map((f) => ({
         filePath: f.filePath,
-        sha256Before: sha(readFileSync(f.filePath, 'utf8')),
+        sha256Before: f.expectedBeforeHash,
         sha256After: sha(f.newContent),
-        status: 'reverted' as const,
+        status: 'committed' as const,
       })),
-      status: 'commit-uncertain',
+      status: 'committed',
       retries: 0,
-      lastError: lastError ?? 'unknown',
     };
-  }
-
-  // Phase 5: verify all files match expected new sha.
-  for (const f of input.files) {
-    const verify = sha(readFileSync(f.filePath, 'utf8'));
-    if (verify !== sha(f.newContent)) {
-      return {
-        commitId,
-        files: input.files.map((g) => ({
-          filePath: g.filePath,
-          sha256Before: g.expectedBeforeHash,
-          sha256After: sha(g.newContent),
-          status: 'commit-uncertain' as const,
-        })),
-        status: 'commit-uncertain',
-        retries: 0,
-        lastError: `verify-mismatch on ${f.filePath}`,
-      };
+  } finally {
+    // Best-effort cleanup of any tmp files that survived (already-renamed paths are gone).
+    for (const tmp of tmpPaths) {
+      try { unlinkSync(tmp); } catch { /* already-renamed or already-gone */ }
     }
   }
-
-  // Phase 6: append per-file commit log entries (one per file, shared commitId).
-  for (const f of input.files) {
-    appendCommit(input.root, {
-      commitId,
-      filePath: f.filePath,
-      sha256Before: f.expectedBeforeHash,
-      sha256After: sha(f.newContent),
-      kind: 'commit',
-      timestamp: new Date().toISOString(),
-    });
-  }
-
-  return {
-    commitId,
-    files: input.files.map((f) => ({
-      filePath: f.filePath,
-      sha256Before: f.expectedBeforeHash,
-      sha256After: sha(f.newContent),
-      status: 'committed' as const,
-    })),
-    status: 'committed',
-    retries: 0,
-  };
 }

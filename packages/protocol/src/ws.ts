@@ -18,6 +18,18 @@ const AttrRangeSchema = z.object({
   valueKind: z.enum(['string-literal', 'expression']),
 }).nullable();
 
+const CssModuleBindingSchema = z.object({
+  importedAs: z.string(),
+  importPath: z.string(),
+  binding: z.string(),
+}).nullable();
+
+const StyledComponentRangeSchema = z.object({
+  componentName: z.string(),
+  templateStart: z.number().int().nonnegative(),
+  templateEnd: z.number().int().nonnegative(),
+}).nullable();
+
 const ElementSourceMapEntrySchema = z.object({
   vid: SHORT_HEX,
   tagName: z.string().min(1),
@@ -27,6 +39,8 @@ const ElementSourceMapEntrySchema = z.object({
   classNameAttr: AttrRangeSchema,
   styleAttr: AttrRangeSchema,
   attrsInsertPos: z.number().int().nonnegative(),
+  cssModule: CssModuleBindingSchema,
+  styledComponent: StyledComponentRangeSchema,
 });
 
 export const WsSnapshotMessage = z.object({
