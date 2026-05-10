@@ -1,0 +1,17 @@
+{
+  "name": "@visual-edit/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "pretest": "playwright install --with-deps chromium",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "vitest": "2.1.4",
+    "playwright": "1.48.2"
+  },
+  "dependencies": {
+    "@visual-edit/daemon": "*"
+  }
+}

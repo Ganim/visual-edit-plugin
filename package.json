@@ -1,7 +1,7 @@
 {
   "name": "visual-edit-monorepo",
   "private": true,
-  "workspaces": ["packages/*", "packages/adapters/*", "apps/*", "examples/*"],
+  "workspaces": ["packages/*", "packages/adapters/*", "apps/*", "examples/*", "tests/e2e"],
   "engines": { "node": ">=22.0.0" },
   "type": "module",
   "scripts": {
