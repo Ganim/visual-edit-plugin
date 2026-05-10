@@ -4,3 +4,5 @@ export {
 } from './strategies.js';
 
 export { rewriteImageUrl, rewriteSrcSet } from './rewriter.js';
+
+export { createAssetMiddleware, type AssetProxyOpts } from './middleware.js';

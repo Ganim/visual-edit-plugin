@@ -15,6 +15,7 @@
   "dependencies": {
     "@visual-edit/shared": "*",
     "@visual-edit/mock-runtime": "*",
+    "@visual-edit/asset-proxy": "*",
     "cross-spawn": "7.0.6",
     "msw": "^2.7.0"
   },

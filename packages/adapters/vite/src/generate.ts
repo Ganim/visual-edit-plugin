@@ -145,7 +145,19 @@ const EPHEMERAL_DIR = ${ephemeralJs};
 export default defineConfig({
   root: EPHEMERAL_DIR,
   publicDir: ${publicDirJs === 'false' ? 'false' : `resolve(USER_ROOT, ${publicDirJs})`},
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'visual-edit-asset-proxy',
+      async configureServer(server) {
+        const { createAssetMiddleware } = await import('@visual-edit/asset-proxy');
+        server.middlewares.use(createAssetMiddleware({
+          publicDir: ${JSON.stringify(input.info.publicDir ?? null)},
+          remoteImageStrategy: 'placeholder',
+        }));
+      },
+    },
+  ],
   css: {
     // PostCSS picks up the user's postcss.config.* automatically when scanning from USER_ROOT
     postcss: USER_ROOT,
