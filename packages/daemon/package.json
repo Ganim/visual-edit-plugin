@@ -22,6 +22,7 @@
     "@visual-edit/project-analyzer": "*",
     "@visual-edit/adapter-vite": "*",
     "@visual-edit/preview-worker": "*",
+    "@visual-edit/code-mods": "*",
     "ws": "8.18.0"
   },
   "devDependencies": {

@@ -10,6 +10,7 @@ import { findFreePort } from './portFinder.js';
 import { PreviewSupervisor } from './previewSupervisor.js';
 import { createHttpServer } from './http.js';
 import { attachWebSocket } from './ws.js';
+import { EditPipeline } from './editPipeline.js';
 
 const DAEMON_VERSION = '0.0.0';
 
@@ -21,6 +22,7 @@ export interface DaemonOptions {
 
 export class Daemon {
   private supervisor = new PreviewSupervisor();
+  private editPipelines = new Map<string, EditPipeline>();
   private startedAt = Date.now();
   private httpServer?: ReturnType<typeof createHttpServer>;
   private wsServer?: ReturnType<typeof attachWebSocket>;
@@ -68,6 +70,8 @@ export class Daemon {
     });
     this.wsServer = attachWebSocket(this.httpServer, {
       getSession: (id) => this.supervisor.list().find((s) => s.id === id) ?? null,
+      getPipeline: (id) => this.editPipelines.get(id) ?? null,
+      daemonPort: () => this.actualPort!,
     });
 
     await new Promise<void>((r) => this.httpServer!.listen(port, '127.0.0.1', r));
@@ -126,11 +130,16 @@ export class Daemon {
     };
 
     const session = await this.supervisor.spawn(sessionId, adapterInput);
+    this.editPipelines.set(sessionId, new EditPipeline({
+      root: this.opts.root,
+      filePath: matchedPage.filePath,
+    }));
     return { url: session.url, sessionId };
   }
 
   async closePreview(req: { sessionId: string }): Promise<void> {
     await this.supervisor.stop(req.sessionId);
+    this.editPipelines.delete(req.sessionId);
   }
 
   async getStatus(): Promise<{ daemonVersion: string; uptime: number; activePreviews: number; workerHealth: Record<string, 'ok' | 'degraded' | 'down'> }> {

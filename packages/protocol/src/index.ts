@@ -9,6 +9,13 @@ export {
   WsHelloMessage,
   WsSnapshotMessage,
   WsByeMessage,
+  WsEditMessage,
+  WsDryRunMessage,
+  WsCommitMessage,
+  WsCommitOkMessage,
+  WsCommitUncertainMessage,
+  WsFileChangedMessage,
+  WsErrorMessage,
   WsMessage,
 } from './ws.js';
 export {

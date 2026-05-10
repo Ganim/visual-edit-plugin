@@ -11,6 +11,7 @@
     { "path": "../diagnostics" },
     { "path": "../project-analyzer" },
     { "path": "../adapters/vite" },
-    { "path": "../preview-worker" }
+    { "path": "../preview-worker" },
+    { "path": "../code-mods" }
   ]
 }
