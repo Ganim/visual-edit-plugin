@@ -20,6 +20,9 @@ describe('GET /__editor/*', () => {
       openPreview: async () => ({ url: 'http://x', sessionId: 's', editorUrl: 'http://x/__editor/?session=s' }),
       closePreview: async () => undefined,
       getStatus: async () => ({ daemonVersion: 'x', uptime: 0, activePreviews: 0, workerHealth: {} }),
+      rollback: async () => undefined,
+      drainAskAI: async () => ({ items: [], leases: {} }),
+      resolveAskAI: async () => undefined,
       editorAssetsRoot: assetsRoot,
     });
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));

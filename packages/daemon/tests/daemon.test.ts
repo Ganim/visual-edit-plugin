@@ -9,6 +9,9 @@ describe('http handlers (unit)', () => {
       openPreview: async () => { opened = true; return { url: 'http://x', sessionId: 's', editorUrl: 'http://127.0.0.1:5170/__editor/?session=s' }; },
       closePreview: async () => {},
       getStatus: async () => ({ daemonVersion: '0.0.0', uptime: 0, activePreviews: 0, workerHealth: {} }),
+      rollback: async () => undefined,
+      drainAskAI: async () => ({ items: [], leases: {} }),
+      resolveAskAI: async () => undefined,
     });
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
     const port = (server.address() as { port: number }).port;

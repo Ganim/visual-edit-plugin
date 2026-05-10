@@ -72,6 +72,8 @@ export class Daemon {
       closePreview: this.closePreview.bind(this),
       getStatus: this.getStatus.bind(this),
       rollback: this.rollback.bind(this),
+      drainAskAI: async () => ({ items: [], leases: {} }),
+      resolveAskAI: async () => undefined,
       ...(this.opts.editorAssetsRoot !== undefined ? { editorAssetsRoot: this.opts.editorAssetsRoot } : {}),
     });
     this.wsServer = attachWebSocket(this.httpServer, {

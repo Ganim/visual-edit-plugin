@@ -8,6 +8,9 @@ import {
   ClosePreviewRequest,
   StatusResponse,
   RollbackRequest,
+  DrainAskAIRequest,
+  DrainAskAIResponse,
+  ResolveAskAIRequest,
 } from '@visual-edit/protocol';
 
 export interface HttpHandlers {
@@ -15,6 +18,8 @@ export interface HttpHandlers {
   closePreview: (req: ClosePreviewRequest) => Promise<void>;
   getStatus: () => Promise<StatusResponse>;
   rollback: (req: RollbackRequest) => Promise<void>;
+  drainAskAI: () => Promise<DrainAskAIResponse>;
+  resolveAskAI: (req: ResolveAskAIRequest) => Promise<void>;
   /** Absolute path to a directory containing editor-ui's static build (index.html etc.). */
   editorAssetsRoot?: string;
 }
@@ -56,6 +61,14 @@ export function createHttpServer(handlers: HttpHandlers): Server {
       } else if (req.method === 'POST' && req.url === '/rollback') {
         const parsed = RollbackRequest.parse(body);
         await handlers.rollback(parsed);
+        send(204, null);
+      } else if (req.method === 'POST' && req.url === '/drain-ask-ai') {
+        DrainAskAIRequest.parse(body); // currently empty, but validates shape
+        const resp = await handlers.drainAskAI();
+        send(200, resp);
+      } else if (req.method === 'POST' && req.url === '/resolve-ask-ai') {
+        const parsed = ResolveAskAIRequest.parse(body);
+        await handlers.resolveAskAI(parsed);
         send(204, null);
       } else {
         send(404, { error: 'not found' });

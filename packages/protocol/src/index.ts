@@ -5,6 +5,9 @@ export {
   ClosePreviewRequest,
   StatusResponse,
   RollbackRequest,
+  DrainAskAIRequest,
+  DrainAskAIResponse,
+  ResolveAskAIRequest,
 } from './http.js';
 export {
   WsHelloMessage,
