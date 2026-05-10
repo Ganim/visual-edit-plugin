@@ -141,3 +141,5 @@ export const WsMessage = z.union([
   WsErrorMessage,
 ]);
 export type WsMessage = z.infer<typeof WsMessage>;
+
+export type ElementSourceMap = z.infer<typeof WsSnapshotMessage>['sourceMap'];

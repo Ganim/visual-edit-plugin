@@ -18,6 +18,7 @@ export {
   WsErrorMessage,
   WsMessage,
 } from './ws.js';
+export type { ElementSourceMap } from './ws.js';
 export {
   IpcStartMessage,
   IpcReadyMessage,
