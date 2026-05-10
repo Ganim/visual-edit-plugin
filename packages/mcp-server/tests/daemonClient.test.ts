@@ -6,7 +6,7 @@ describe('DaemonClient', () => {
   it('openPreview POSTs to /preview', async () => {
     const server = createServer((req, res) => {
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ url: 'http://x:1', sessionId: 'abc' }));
+      res.end(JSON.stringify({ url: 'http://x:1', sessionId: 'abc', editorUrl: 'http://x/__editor/?session=abc' }));
     });
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
     const port = (server.address() as { port: number }).port;
