@@ -9,6 +9,7 @@ import {
   type WsCommitOkMessage,
   type WsCommitUncertainMessage,
   type WsErrorMessage,
+  type WsFileChangedMessage,
 } from '@visual-edit/protocol';
 import type { PreviewSession } from '@visual-edit/shared';
 import type { EditPipeline } from './editPipeline.js';
@@ -128,4 +129,16 @@ function codeOf(err: unknown): string {
   const m = (err as Error).message ?? '';
   const match = m.match(/VE_[A-Z]+_\d+/);
   return match ? match[0] : 'VE_INTERNAL_999';
+}
+
+/**
+ * Broadcast a file-changed event to all WS clients connected to the daemon. The clients
+ * filter by sessionId on receive.
+ */
+export function broadcastFileChanged(wss: WebSocketServer, msg: Omit<WsFileChangedMessage, 'kind'>): void {
+  const wire: WsFileChangedMessage = { kind: 'file-changed', ...msg };
+  const payload = JSON.stringify(wire);
+  for (const client of wss.clients) {
+    if (client.readyState === client.OPEN) client.send(payload);
+  }
 }

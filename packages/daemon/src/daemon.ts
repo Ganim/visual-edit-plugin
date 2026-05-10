@@ -9,8 +9,9 @@ import { writeLock, removeLock, readLock } from './lockFile.js';
 import { findFreePort } from './portFinder.js';
 import { PreviewSupervisor } from './previewSupervisor.js';
 import { createHttpServer } from './http.js';
-import { attachWebSocket } from './ws.js';
+import { attachWebSocket, broadcastFileChanged } from './ws.js';
 import { EditPipeline } from './editPipeline.js';
+import { FileWatcher } from './fileWatcher.js';
 
 const DAEMON_VERSION = '0.0.0';
 
@@ -23,6 +24,7 @@ export interface DaemonOptions {
 export class Daemon {
   private supervisor = new PreviewSupervisor();
   private editPipelines = new Map<string, EditPipeline>();
+  private fileWatcher = new FileWatcher();
   private startedAt = Date.now();
   private httpServer?: ReturnType<typeof createHttpServer>;
   private wsServer?: ReturnType<typeof attachWebSocket>;
@@ -75,6 +77,19 @@ export class Daemon {
     });
 
     await new Promise<void>((r) => this.httpServer!.listen(port, '127.0.0.1', r));
+
+    this.fileWatcher.on('external-change', (e) => {
+      for (const [sessionId, pipeline] of this.editPipelines) {
+        if (pipeline.getFilePath() !== e.filePath) continue;
+        broadcastFileChanged(this.wsServer!, {
+          sessionId,
+          filePath: e.filePath,
+          sha256: e.sha256,
+          dirtySourceMap: true,
+        });
+      }
+    });
+
     await writeLock(this.opts.root, { pid: process.pid, port, daemonVersion: DAEMON_VERSION });
 
     this.logger.info('daemon started', { port, root: this.opts.root, pid: process.pid });
@@ -96,6 +111,7 @@ export class Daemon {
       this.httpServer.closeAllConnections();
       await new Promise<void>((r) => this.httpServer!.close(() => r()));
     }
+    await this.fileWatcher.close();
     await removeLock(this.opts.root);
     this.logger.info('daemon stopped');
   }
@@ -130,10 +146,13 @@ export class Daemon {
     };
 
     const session = await this.supervisor.spawn(sessionId, adapterInput);
-    this.editPipelines.set(sessionId, new EditPipeline({
+    const pipeline = new EditPipeline({
       root: this.opts.root,
       filePath: matchedPage.filePath,
-    }));
+      onSelfWrite: (path, sha256) => this.fileWatcher.registerSelfWrite(path, sha256),
+    });
+    this.editPipelines.set(sessionId, pipeline);
+    await this.fileWatcher.watch(matchedPage.filePath);
     return { url: session.url, sessionId };
   }
 
