@@ -5,6 +5,7 @@
     { "path": "./protocol" },
     { "path": "./diagnostics" },
     { "path": "./project-analyzer" },
+    { "path": "./asset-proxy" },
     { "path": "./code-mods" },
     { "path": "./mock-runtime" },
     { "path": "./adapters/vite" },
