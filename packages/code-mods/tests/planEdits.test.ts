@@ -46,4 +46,16 @@ describe('planEdits', () => {
       ]),
     ).toThrow(/VE_CODEMOD_001/);
   });
+
+  it('plans multiple edits across multiple elements', () => {
+    const src = `export const X = () => <div className="a"><span className="b" /></div>;\n`;
+    const { instrumented, sourceMap } = instrument(src, 'X.tsx');
+    const [vid1, vid2] = Object.keys(sourceMap);
+    const patches = planEdits(instrumented, sourceMap, [
+      { kind: 'className', element: vid1!, newValue: 'A' },
+      { kind: 'className', element: vid2!, newValue: 'B' },
+    ]);
+    expect(patches).toHaveLength(2);
+    expect(patches.map((p) => p.replacement).sort()).toEqual(['A', 'B']);
+  });
 });

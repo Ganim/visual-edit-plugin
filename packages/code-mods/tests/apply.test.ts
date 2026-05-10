@@ -29,4 +29,12 @@ describe('apply', () => {
       ]),
     ).toThrow(/overlapping patches/);
   });
+
+  it('handles empty patches array (no-op)', () => {
+    const src = 'unchanged';
+    const result = apply(src, []);
+    expect(result.after).toBe(src);
+    expect(result.before).toBe(src);
+    expect(result.beforeHash).toBe(result.afterHash);
+  });
 });

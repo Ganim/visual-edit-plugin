@@ -10,6 +10,7 @@ export interface ApplyResult {
 }
 
 export function apply(source: string, patches: TextPatch[]): ApplyResult {
+  // Sort ascending by start. Insertions (start === end) at same position are kept in input order.
   const sorted = [...patches].sort((a, b) => {
     if (a.start !== b.start) return a.start - b.start;
     return patches.indexOf(a) - patches.indexOf(b);
