@@ -17,6 +17,9 @@ export {
   WsCommitUncertainMessage,
   WsFileChangedMessage,
   WsErrorMessage,
+  WsAskAIMessage,
+  WsAskAIQueuedMessage,
+  WsAskAIResolvedMessage,
   WsMessage,
 } from './ws.js';
 export type { ElementSourceMap } from './ws.js';

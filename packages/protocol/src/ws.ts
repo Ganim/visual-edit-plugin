@@ -128,6 +128,34 @@ export const WsErrorMessage = z.object({
 });
 export type WsErrorMessage = z.infer<typeof WsErrorMessage>;
 
+export const WsAskAIMessage = z.object({
+  kind: z.literal('ask-ai'),
+  requestId: z.string().min(1),
+  sessionId: z.string().min(1),
+  element: SHORT_HEX,
+  prompt: z.string().min(1).max(8192),
+});
+export type WsAskAIMessage = z.infer<typeof WsAskAIMessage>;
+
+export const WsAskAIQueuedMessage = z.object({
+  kind: z.literal('ask-ai-queued'),
+  requestId: z.string().min(1),
+  sessionId: z.string().min(1),
+  askId: z.string().min(1),
+  enqueuedAt: z.string().min(1),
+});
+export type WsAskAIQueuedMessage = z.infer<typeof WsAskAIQueuedMessage>;
+
+export const WsAskAIResolvedMessage = z.object({
+  kind: z.literal('ask-ai-resolved'),
+  sessionId: z.string().min(1),
+  askId: z.string().min(1),
+  outcome: z.enum(['committed', 'rejected', 'failed', 'no-op']),
+  summary: z.string(),
+  commitId: z.string().optional(),
+});
+export type WsAskAIResolvedMessage = z.infer<typeof WsAskAIResolvedMessage>;
+
 export const WsMessage = z.union([
   WsHelloMessage,
   WsSnapshotMessage,
@@ -139,6 +167,9 @@ export const WsMessage = z.union([
   WsCommitUncertainMessage,
   WsFileChangedMessage,
   WsErrorMessage,
+  WsAskAIMessage,
+  WsAskAIQueuedMessage,
+  WsAskAIResolvedMessage,
 ]);
 export type WsMessage = z.infer<typeof WsMessage>;
 
