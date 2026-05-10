@@ -79,10 +79,19 @@ export function planEdits(input: PlanEditsInput): PlannedFile[] {
       });
     } else if (edit.kind === 'styled-prop') {
       if (!entry.styledComponent) {
-        // Defer cross-file refusal logic to Task 8 — for now, throw VE_CODEMOD_001
+        if (/^[A-Z]/.test(entry.tagName)) {
+          throw new VisualEditError(makeEnvelope({
+            code: CODES.VE_STYLED_001_CROSS_FILE,
+            message: `[VE_STYLED_001]: styled-prop edit refused — '${entry.tagName}' is not defined in this file (likely imported)`,
+            severity: 'error',
+            recovery: 'user-action',
+            blame: 'tool',
+            hint: 'Phase 1.F supports same-file styled definitions only. Edit the source file directly.',
+          }));
+        }
         throw new VisualEditError(makeEnvelope({
           code: CODES.VE_CODEMOD_001_UNKNOWN_VID,
-          message: `[VE_CODEMOD_001]: element has no styled-component definition`,
+          message: `[VE_CODEMOD_001]: element '${entry.tagName}' is not a styled-component`,
           severity: 'error',
           recovery: 'user-action',
           blame: 'tool',
