@@ -1,9 +1,11 @@
 import { useStore } from './state.js';
+import type { AskAiItemUI } from './state.js';
 import type { Edit } from '@visual-edit/shared';
 
 export interface WsClient {
   sendEdit: (edits: Edit[]) => string;     // returns requestId
   sendCommit: (planId: string) => string;
+  sendAskAI: (element: string, prompt: string) => string;
   close: () => void;
 }
 
@@ -41,6 +43,22 @@ export function connect(url: string, sessionId: string): WsClient {
         s.setError(`commit-uncertain: ${msg['lastError']}`);
         s.clearDryRun();
         return;
+      case 'ask-ai-queued':
+        s.addAskAiItem({
+          askId: msg['askId'] as string,
+          element: '',
+          prompt: '',
+          enqueuedAt: msg['enqueuedAt'] as string,
+          state: 'pending',
+        });
+        return;
+      case 'ask-ai-resolved':
+        s.updateAskAiResolved(msg['askId'] as string, {
+          outcome: msg['outcome'] as AskAiItemUI['outcome'],
+          summary: msg['summary'] as string,
+          commitId: msg['commitId'] as string | undefined,
+        });
+        return;
       case 'file-changed':
         s.markStale(msg['sha256'] as string);
         return;
@@ -61,6 +79,11 @@ export function connect(url: string, sessionId: string): WsClient {
     sendCommit: (planId) => {
       const requestId = nextId();
       ws.send(JSON.stringify({ kind: 'commit', requestId, sessionId, planId }));
+      return requestId;
+    },
+    sendAskAI: (element, prompt) => {
+      const requestId = nextId();
+      ws.send(JSON.stringify({ kind: 'ask-ai', requestId, sessionId, element, prompt }));
       return requestId;
     },
     close: () => ws.close(),
