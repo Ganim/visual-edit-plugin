@@ -15,7 +15,8 @@
   "dependencies": {
     "@visual-edit/shared": "*",
     "@visual-edit/mock-runtime": "*",
-    "cross-spawn": "7.0.6"
+    "cross-spawn": "7.0.6",
+    "msw": "^2.7.0"
   },
   "devDependencies": {
     "@types/cross-spawn": "6.0.6"

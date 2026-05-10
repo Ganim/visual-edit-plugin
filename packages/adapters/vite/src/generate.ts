@@ -1,8 +1,26 @@
 import { mkdir, writeFile, access } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { join, resolve, relative } from 'node:path';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { buildEntryWrapper, buildFakerBindings } from '@visual-edit/mock-runtime';
 import type { AdapterInput, GenerateResult } from './types.js';
+
+const _require = createRequire(import.meta.url);
+
+let _cachedSwSource: string | null = null;
+
+export function loadMswServiceWorker(): string {
+  if (_cachedSwSource) return _cachedSwSource;
+  // msw/lib/mockServiceWorker.js is not listed in the package's "exports" map,
+  // so require.resolve('msw/lib/mockServiceWorker.js') throws. We resolve the
+  // package root via its package.json (which IS exported implicitly) and then
+  // navigate to the SW file by filesystem path.
+  const mswRoot = join(_require.resolve('msw/package.json'), '..');
+  const swPath = join(mswRoot, 'lib', 'mockServiceWorker.js');
+  _cachedSwSource = readFileSync(swPath, 'utf8');
+  return _cachedSwSource;
+}
 
 const CANDIDATE_CSS = ['src/index.css', 'src/main.css', 'src/app.css', 'src/styles.css'];
 
@@ -58,6 +76,12 @@ export async function generateEphemeralPreview(input: AdapterInput): Promise<Gen
   // Write vite.config.ts
   const viteConfigPath = join(ephemeralDir, 'vite.config.ts');
   await writeFile(viteConfigPath, renderViteConfig(input, ephemeralDir), 'utf8');
+
+  // Write MSW service worker so the browser can register it at /mockServiceWorker.js.
+  // The ephemeral dir is the Vite root (and therefore the public root), so placing it
+  // here makes it available at the correct origin-relative path.
+  const mswSwPath = join(ephemeralDir, 'mockServiceWorker.js');
+  await writeFile(mswSwPath, loadMswServiceWorker(), 'utf8');
 
   return { ephemeralDir, entryPath, viteConfigPath, indexHtmlPath };
 }
