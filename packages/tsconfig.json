@@ -11,6 +11,7 @@
     { "path": "./adapters/vite" },
     { "path": "./preview-worker" },
     { "path": "./daemon" },
-    { "path": "./mcp-server" }
+    { "path": "./mcp-server" },
+    { "path": "./cli" }
   ]
 }
