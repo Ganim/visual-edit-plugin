@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { buildEntryWrapper, buildFakerBindings } from '@visual-edit/mock-runtime';
+import { buildEntryWrapper, buildFakerBindings, buildMSWHandlers } from '@visual-edit/mock-runtime';
 import type { AdapterInput, GenerateResult } from './types.js';
 
 const _require = createRequire(import.meta.url);
@@ -55,6 +55,17 @@ export async function generateEphemeralPreview(input: AdapterInput): Promise<Gen
   // Write faker bindings (sibling of entry)
   const fakerBindingsPath = join(ephemeralDir, 'faker-bindings.ts');
   await writeFile(fakerBindingsPath, buildFakerBindings(input.schemas), 'utf8');
+
+  // Write MSW handlers module (sibling of entry). endpoints defaults to [] when not
+  // provided in AdapterInput — the handler list will be empty and MSW startup short-
+  // circuits via `if (handlers.length === 0) return;` in the entry wrapper.
+  const handlersPath = join(ephemeralDir, 'handlers.ts');
+  const handlersSource = buildMSWHandlers({
+    schemas: input.schemas,
+    endpoints: input.endpoints ?? [],
+    overrides: {},
+  });
+  await writeFile(handlersPath, handlersSource, 'utf8');
 
   // Write entry — ALL paths are relative to ephemeralDir
   const entryPath = join(ephemeralDir, 'entry.tsx');

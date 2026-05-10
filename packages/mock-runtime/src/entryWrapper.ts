@@ -39,6 +39,8 @@ export function buildEntryWrapper(input: BuildEntryWrapperInput): string {
   const lines: string[] = [];
   lines.push(`// Auto-generated synthetic entry by @visual-edit/mock-runtime — do not edit.`);
   lines.push(`import { createRoot } from 'react-dom/client';`);
+  lines.push(`import { setupWorker } from 'msw/browser';`);
+  lines.push(`import { handlers } from './handlers.js';`);
   lines.push(`import * as mocks from '${input.fakerBindingsImportPath}';`);
   if (input.userCssImportPath) {
     // Side-effect import — must come before Page so Tailwind utilities resolve.
@@ -57,6 +59,14 @@ export function buildEntryWrapper(input: BuildEntryWrapperInput): string {
   } else {
     lines.push(`const wrapped = (<Page />);`);
   }
+  lines.push('');
+  lines.push(`async function __veStartMSW() {`);
+  lines.push(`  if (handlers.length === 0) return;`);
+  lines.push(`  const worker = setupWorker(...handlers);`);
+  lines.push(`  await worker.start({ onUnhandledRequest: 'bypass', quiet: true });`);
+  lines.push(`}`);
+  lines.push('');
+  lines.push(`await __veStartMSW();`);
   lines.push(`createRoot(document.getElementById('root')!).render(wrapped);`);
   lines.push('');
   lines.push(BRIDGE_SOURCE);

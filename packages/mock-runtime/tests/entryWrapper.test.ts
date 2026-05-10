@@ -33,4 +33,17 @@ describe('buildEntryWrapper', () => {
     expect(code).not.toContain(`src/index.css`);
     expect(code).toContain(`const wrapped = (<Page />);`);
   });
+
+  it('imports handlers and starts MSW before render', () => {
+    const code = buildEntryWrapper({
+      pageImportPath: './Home.tsx',
+      configImportPath: '../visual-edit.config.ts',
+      fakerBindingsImportPath: './faker-bindings.ts',
+      userCssImportPath: null,
+      sessionId: 's1',
+    });
+    expect(code).toContain("import { setupWorker } from 'msw/browser'");
+    expect(code).toContain("import { handlers } from './handlers.js'");
+    expect(code).toContain('await __veStartMSW()');
+  });
 });

@@ -1,10 +1,17 @@
-import type { ProjectInfo, PageEntry, MockSchema, VisualEditConfig } from '@visual-edit/shared';
+import type { ProjectInfo, PageEntry, MockSchema, VisualEditConfig, ApiEndpoint } from '@visual-edit/shared';
 
 export interface AdapterInput {
   info: ProjectInfo;
   page: PageEntry;
   config: VisualEditConfig | null;
   schemas: MockSchema[];
+  /**
+   * API endpoint contracts discovered by `findApiContracts`. Optional — when absent
+   * (or empty) the generated `handlers.ts` exports an empty array and MSW startup
+   * short-circuits. Full wiring happens when the daemon calls `findApiContracts`
+   * before invoking the adapter (Phase 1.E Task 11).
+   */
+  endpoints?: ApiEndpoint[];
   port: number;
   sessionId: string;
   /** Filtered env vars (already passed through safeEnvPrefixes). */
