@@ -24,6 +24,10 @@ export function planEdits(
       patches.push(planClassNameEdit(entry, edit.newValue));
     } else if (edit.kind === 'style') {
       patches.push(planStyleEdit(entry, edit.newObjectText));
+    } else if (edit.kind === 'css-module' || edit.kind === 'styled-prop') {
+      // CSS Module and styled-prop edits are handled by the multi-file pipeline (Task 4+).
+      // planEdits only handles single-file edits; throw a clear error for now.
+      throw new Error(`planEdits: edit kind '${edit.kind}' requires multi-file pipeline — use planMultiFileEdits`);
     } else {
       const _exhaustive: never = edit;
       throw new Error(`planEdits: unsupported edit kind: ${JSON.stringify(_exhaustive)}`);

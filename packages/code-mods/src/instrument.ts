@@ -63,6 +63,8 @@ export function instrument(source: string, filePath: string): InstrumentResult {
           classNameAttr: findAttrRange(node, sf2, 'className'),
           styleAttr: findAttrRange(node, sf2, 'style'),
           attrsInsertPos,
+          cssModule: null,
+          styledComponent: null,
         };
         sourceMap[vid] = entry;
       }
