@@ -43,6 +43,6 @@ describe('wal', () => {
     const path = join(tmp, '.visual-edit', 'queue.wal');
     mkdirSync(join(tmp, '.visual-edit'), { recursive: true });
     writeFileSync(path, JSON.stringify({ seq: 1, version: '2', sha256: 'x', timestamp: 't', op: { op: 'enqueue', askId: 'a', element: 'v', filePath: '/f.tsx', prompt: 'p', timestamp: 't' } }) + '\n', 'utf8');
-    expect(() => readWalEntries(tmp)).toThrow(/version mismatch/);
+    expect(() => readWalEntries(tmp)).toThrow(/VE_QUEUE_005/);
   });
 });

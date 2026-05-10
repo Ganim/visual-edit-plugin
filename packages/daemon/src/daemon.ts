@@ -138,13 +138,15 @@ export class Daemon {
         };
         const item = this.queue.resolve(resolveInput);
         // Broadcast to all WS clients. sessionId '*' is a wire sentinel — clients match by askId.
-        broadcastAskAIResolved(this.wsServer!, {
-          sessionId: '*',
-          askId: item.askId,
-          outcome: item.outcome!,
-          summary: item.summary ?? '',
-          ...(item.commitId !== undefined ? { commitId: item.commitId } : {}),
-        });
+        if (this.wsServer) {
+          broadcastAskAIResolved(this.wsServer, {
+            sessionId: '*',
+            askId: item.askId,
+            outcome: item.outcome!,
+            summary: item.summary ?? '',
+            ...(item.commitId !== undefined ? { commitId: item.commitId } : {}),
+          });
+        }
       },
       ...(this.opts.editorAssetsRoot !== undefined ? { editorAssetsRoot: this.opts.editorAssetsRoot } : {}),
     });

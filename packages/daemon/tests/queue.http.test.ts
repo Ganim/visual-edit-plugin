@@ -19,7 +19,7 @@ describe('queue HTTP routes', () => {
       closePreview: async () => undefined,
       getStatus: async () => ({ daemonVersion: '0', uptime: 0, activePreviews: 0, workerHealth: {} }),
       rollback: async () => undefined,
-      drainAskAI: async () => ({ items: qm.drain().items, leases: qm.drain().leases }), // last drain wins (test-only oddity)
+      drainAskAI: async () => qm.drain(),
       resolveAskAI: async (req) => { qm.resolve(req); },
     });
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));

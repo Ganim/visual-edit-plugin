@@ -57,7 +57,7 @@ export const ResolveAskAIRequest = z.object({
   askId: z.string().min(1),
   leaseId: z.string().min(1),
   outcome: z.enum(['committed', 'rejected', 'failed', 'no-op']),
-  summary: z.string(),
+  summary: z.string().max(4096),
   commitId: z.string().optional(),
 });
 export type ResolveAskAIRequest = z.infer<typeof ResolveAskAIRequest>;

@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { CODES, VisualEditError, makeEnvelope } from '@visual-edit/diagnostics';
 import type { WalEntry, WalOp } from './types.js';
 
 const WAL_PATH = '.visual-edit/queue.wal';
@@ -67,7 +68,14 @@ export function readWalEntries(root: string): WalEntry[] {
     try { entry = JSON.parse(line) as WalEntry; }
     catch { break; } // corrupt JSON — stop
     if (entry.version !== WAL_VERSION) {
-      throw new Error(`[VE_QUEUE_WAL]: version mismatch — got ${entry.version}, expected ${WAL_VERSION}`);
+      throw new VisualEditError(makeEnvelope({
+        code: CODES.VE_QUEUE_005_WAL_VERSION_MISMATCH,
+        message: `[VE_QUEUE_005]: WAL version mismatch — got ${entry.version}, expected ${WAL_VERSION}`,
+        severity: 'fatal',
+        recovery: 'user-action',
+        blame: 'environment',
+        hint: 'Delete .visual-edit/queue.wal to reset the queue (loses pending items).',
+      }));
     }
     const expected = shaOfPayload(entry.seq, entry.op);
     if (expected !== entry.sha256) break; // corruption — stop at last valid

@@ -30,6 +30,8 @@ export function attachWebSocket(http: Server, handlers: WsHandlers): WebSocketSe
 
   wss.on('connection', (socket: WebSocket) => {
     let sessionId: string | null = null;
+    let unknownKindCount = 0;
+    const UNKNOWN_KIND_LIMIT = 5;
 
     socket.on('message', async (raw) => {
       let parsed: unknown;
@@ -137,7 +139,12 @@ export function attachWebSocket(http: Server, handlers: WsHandlers): WebSocketSe
 
       if (obj.kind === 'bye') { socket.close(1000, 'bye'); return; }
 
-      // Unknown kind — surface a structured error rather than silently drop.
+      // Unknown kind — rate-limit and surface a structured error rather than silently drop.
+      unknownKindCount++;
+      if (unknownKindCount > UNKNOWN_KIND_LIMIT) {
+        socket.close(1003, 'too many unknown messages');
+        return;
+      }
       if (sessionId) {
         sendError(socket, sessionId, 'VE_PROTOCOL_002', `unknown WS kind: ${obj.kind}`, undefined);
       } else {
