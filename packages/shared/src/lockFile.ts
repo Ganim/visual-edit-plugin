@@ -6,6 +6,8 @@ export interface DaemonLockData {
   port: number;
   daemonVersion: string;
   startedAt: string;
+  heartbeat: string;   // ISO timestamp; updated every 5s by daemon
+  stateHash: string;   // sha256 of recent activity (used to detect drift)
   version: '1';
 }
 
