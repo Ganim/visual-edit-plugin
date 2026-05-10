@@ -10,3 +10,4 @@ export {
 } from './envelope.js';
 export { Logger, type LogSink, type LogContext, type LoggerOptions } from './logger.js';
 export { SAFE_LOG_FIELDS, redactValue, redactContext } from './redaction.js';
+export { FileSink, type FileSinkOpts } from './fileSink.js';
