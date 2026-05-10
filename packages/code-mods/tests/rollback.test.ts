@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { commit } from '../src/commit.js';
 import { rollback } from '../src/rollback.js';
+import { readCommitLog } from '../src/commitLog.js';
 
 let tmp: string;
 beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 've-rb-')); });
@@ -32,5 +33,17 @@ describe('rollback', () => {
     // External edit between commit and rollback.
     writeFileSync(file, 'EXTERNAL', 'utf8');
     await expect(rollback({ root: tmp, commitId: r.commitId })).rejects.toThrow(/VE_FS_003/);
+  });
+
+  it('refuses to rollback a rollback (kind !== "commit")', async () => {
+    const file = join(tmp, 'p.tsx');
+    writeFileSync(file, 'V1', 'utf8');
+    const r = await commit({ root: tmp, filePath: file, expectedBeforeHash: sha('V1'), newContent: 'V2' });
+    await rollback({ root: tmp, commitId: r.commitId });
+    // Find the rollback entry's own commitId from the log.
+    const log = readCommitLog(tmp);
+    const rbEntry = log.find((e) => e.kind === 'rollback');
+    expect(rbEntry).toBeDefined();
+    await expect(rollback({ root: tmp, commitId: rbEntry!.commitId })).rejects.toThrow(/VE_CODEMOD_003/);
   });
 });

@@ -31,7 +31,13 @@ export async function rollback(input: RollbackInput): Promise<RollbackResult> {
     }));
   }
   if (original.kind !== 'commit') {
-    throw new Error(`rollback: target ${input.commitId} is not a forward commit`);
+    throw new VisualEditError(makeEnvelope({
+      code: CODES.VE_CODEMOD_003_STALE_DRY_RUN,
+      message: `[VE_CODEMOD_003]: rollback target ${input.commitId} has kind '${original.kind}' — only 'commit' entries can be rolled back`,
+      severity: 'error',
+      recovery: 'user-action',
+      blame: 'user-config',
+    }));
   }
   const current = readFileSync(original.filePath, 'utf8');
   const currentHash = sha(current);
