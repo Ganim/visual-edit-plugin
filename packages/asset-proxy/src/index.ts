@@ -3,3 +3,4 @@ export {
   type RemoteImageStrategy, type StrategyContext, type StrategyResponse, type CachedAsset,
 } from './strategies.js';
 
+export { rewriteImageUrl, rewriteSrcSet } from './rewriter.js';
