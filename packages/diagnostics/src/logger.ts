@@ -1,4 +1,5 @@
 import type { ErrorEnvelope } from './envelope.js';
+import { redactContext } from './redaction.js';
 
 export interface LogSink {
   write(line: string): void;
@@ -9,15 +10,28 @@ export interface LogContext {
   [k: string]: unknown;
 }
 
+export interface LoggerOptions {
+  sink?: LogSink;
+  /** When true (default), unknown context fields are replaced with <HASH:...> placeholders. */
+  redact?: boolean;
+}
+
 export class Logger {
-  constructor(private sink: LogSink = { write: (s) => process.stderr.write(s) }) {}
+  private sink: LogSink;
+  private redact: boolean;
+
+  constructor(opts: LoggerOptions = {}) {
+    this.sink = opts.sink ?? { write: (s) => process.stderr.write(s) };
+    this.redact = opts.redact ?? true;
+  }
 
   private emit(level: 'info' | 'warn' | 'error' | 'debug', msg: string, ctx?: LogContext): void {
+    const safe = ctx && this.redact ? redactContext(ctx) : ctx;
     const line = JSON.stringify({
       ts: new Date().toISOString(),
       level,
       msg,
-      ...(ctx ?? {}),
+      ...(safe ?? {}),
     }) + '\n';
     this.sink.write(line);
   }

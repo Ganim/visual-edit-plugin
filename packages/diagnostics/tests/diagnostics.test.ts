@@ -36,7 +36,7 @@ describe('diagnostics', () => {
 
   it('Logger writes NDJSON lines', async () => {
     const lines: string[] = [];
-    const logger = new Logger({ write: (s) => lines.push(s) });
+    const logger = new Logger({ sink: { write: (s) => lines.push(s) }, redact: false });
     logger.info('hello', { foo: 'bar' });
     expect(lines).toHaveLength(1);
     const parsed = JSON.parse(lines[0]!.trim());
@@ -48,7 +48,7 @@ describe('diagnostics', () => {
 
   it('Logger.error includes envelope when present', () => {
     const lines: string[] = [];
-    const logger = new Logger({ write: (s) => lines.push(s) });
+    const logger = new Logger({ sink: { write: (s) => lines.push(s) } });
     const env = makeEnvelope({
       code: CODES.VE_INTERNAL_999_ASSERT,
       message: 'invariant violated',
