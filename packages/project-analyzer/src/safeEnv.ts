@@ -37,6 +37,11 @@ const TOOL_INFRA_NAMES = new Set([
   'LANG',
   'LC_ALL',
   'COLORTERM',
+  // Vitest worker thread internal flags (vitest sets these in spawned workers).
+  // Reading them is benign — they are not user secrets.
+  'WATCH_REPORT_DEPENDENCIES',
+  'POSITIONAL_ARGUMENTS',
+  'TINYPOOL_WORKER_ID',
 ]);
 
 function isToolInfra(prop: string): boolean {
