@@ -42,6 +42,26 @@ export function registerTools(server: Server, daemonUrl: string): void {
           properties: { commitId: { type: 'string', description: 'The commit id to roll back' } },
         },
       },
+      {
+        name: 'drain_ask_ai',
+        description: 'Drain pending Ask-AI items from the queue, returning each with a lease.',
+        inputSchema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'resolve_ask_ai',
+        description: 'Resolve a leased Ask-AI item with an outcome (committed/rejected/failed/no-op) and a summary.',
+        inputSchema: {
+          type: 'object',
+          required: ['askId', 'leaseId', 'outcome', 'summary'],
+          properties: {
+            askId: { type: 'string' },
+            leaseId: { type: 'string' },
+            outcome: { type: 'string', enum: ['committed', 'rejected', 'failed', 'no-op'] },
+            summary: { type: 'string' },
+            commitId: { type: 'string' },
+          },
+        },
+      },
     ],
   }));
 
@@ -64,6 +84,14 @@ export function registerTools(server: Server, daemonUrl: string): void {
     if (name === 'rollback') {
       await client.rollback(args.commitId as string);
       return { content: [{ type: 'text', text: `rolled back commit ${args.commitId as string}` }] };
+    }
+    if (name === 'drain_ask_ai') {
+      const result = await client.drainAskAI();
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    }
+    if (name === 'resolve_ask_ai') {
+      await client.resolveAskAI(args as never);
+      return { content: [{ type: 'text', text: `resolved ${args.askId as string} as ${args.outcome as string}` }] };
     }
     throw new Error(`unknown tool: ${name}`);
   });

@@ -38,6 +38,25 @@ export class DaemonClient {
     if (!resp.ok && resp.status !== 204) throw new Error(`daemon ${resp.status}: ${await resp.text()}`);
   }
 
+  async drainAskAI(): Promise<{ items: unknown[]; leases: Record<string, string> }> {
+    const r = await fetch(`${this.baseUrl}/drain-ask-ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (!r.ok) throw new Error(`drain-ask-ai failed: ${r.status}`);
+    return r.json() as Promise<{ items: unknown[]; leases: Record<string, string> }>;
+  }
+
+  async resolveAskAI(req: { askId: string; leaseId: string; outcome: string; summary: string; commitId?: string }): Promise<void> {
+    const r = await fetch(`${this.baseUrl}/resolve-ask-ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    });
+    if (!r.ok && r.status !== 204) throw new Error(`resolve-ask-ai failed: ${r.status}`);
+  }
+
   private async post<TIn, TOut>(
     path: string,
     body: TIn,
