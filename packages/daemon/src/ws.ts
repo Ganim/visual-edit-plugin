@@ -4,20 +4,25 @@ import {
   WsHelloMessage,
   WsEditMessage,
   WsCommitMessage,
+  WsAskAIMessage,
   type WsSnapshotMessage,
   type WsDryRunMessage,
   type WsCommitOkMessage,
   type WsCommitUncertainMessage,
   type WsErrorMessage,
   type WsFileChangedMessage,
+  type WsAskAIQueuedMessage,
+  type WsAskAIResolvedMessage,
 } from '@visual-edit/protocol';
 import type { PreviewSession } from '@visual-edit/shared';
 import type { EditPipeline } from './editPipeline.js';
+import type { QueueManager } from './queue/queueManager.js';
 
 export interface WsHandlers {
   getSession: (sessionId: string) => PreviewSession | null;
   getPipeline: (sessionId: string) => EditPipeline | null;
   daemonPort: () => number;
+  getQueue: () => QueueManager;
 }
 
 export function attachWebSocket(http: Server, handlers: WsHandlers): WebSocketServer {
@@ -110,6 +115,26 @@ export function attachWebSocket(http: Server, handlers: WsHandlers): WebSocketSe
         return;
       }
 
+      if (obj.kind === 'ask-ai') {
+        const ask = WsAskAIMessage.safeParse(parsed);
+        if (!ask.success) return sendError(socket, sessionId, 'VE_PROTOCOL_002', 'invalid ask-ai message', undefined);
+        const queue = handlers.getQueue();
+        const item = queue.enqueue({
+          element: ask.data.element,
+          filePath: pipeline.getFilePath(),
+          prompt: ask.data.prompt,
+        });
+        const reply: WsAskAIQueuedMessage = {
+          kind: 'ask-ai-queued',
+          requestId: ask.data.requestId,
+          sessionId,
+          askId: item.askId,
+          enqueuedAt: item.enqueuedAt,
+        };
+        socket.send(JSON.stringify(reply));
+        return;
+      }
+
       if (obj.kind === 'bye') { socket.close(1000, 'bye'); return; }
     });
   });
@@ -137,6 +162,19 @@ function codeOf(err: unknown): string {
  */
 export function broadcastFileChanged(wss: WebSocketServer, msg: Omit<WsFileChangedMessage, 'kind'>): void {
   const wire: WsFileChangedMessage = { kind: 'file-changed', ...msg };
+  const payload = JSON.stringify(wire);
+  for (const client of wss.clients) {
+    if (client.readyState === client.OPEN) client.send(payload);
+  }
+}
+
+/**
+ * Broadcast an ask-ai-resolved event to all WS clients. sessionId is '*' as a sentinel
+ * meaning "broadcast — client matches by askId, not sessionId".
+ * The WsAskAIResolvedMessage schema permits '*' since it only requires min(1).
+ */
+export function broadcastAskAIResolved(wss: WebSocketServer, msg: Omit<WsAskAIResolvedMessage, 'kind'>): void {
+  const wire: WsAskAIResolvedMessage = { kind: 'ask-ai-resolved', ...msg };
   const payload = JSON.stringify(wire);
   for (const client of wss.clients) {
     if (client.readyState === client.OPEN) client.send(payload);

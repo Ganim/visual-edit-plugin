@@ -10,9 +10,10 @@ import { writeLock, removeLock, readLock } from './lockFile.js';
 import { findFreePort } from './portFinder.js';
 import { PreviewSupervisor } from './previewSupervisor.js';
 import { createHttpServer } from './http.js';
-import { attachWebSocket, broadcastFileChanged } from './ws.js';
+import { attachWebSocket, broadcastFileChanged, broadcastAskAIResolved } from './ws.js';
 import { EditPipeline } from './editPipeline.js';
 import { FileWatcher } from './fileWatcher.js';
+import { QueueManager } from './queue/queueManager.js';
 
 const DAEMON_VERSION = '0.0.0';
 
@@ -33,9 +34,11 @@ export class Daemon {
   private logger: Logger;
   private projectInfo?: ProjectInfo;
   private actualPort?: number;
+  private queue: QueueManager;
 
   constructor(private opts: DaemonOptions) {
     this.logger = opts.logger ?? new Logger();
+    this.queue = new QueueManager(opts.root);
   }
 
   /** Resolved port the daemon is actually listening on. Undefined before start(). */
@@ -72,14 +75,32 @@ export class Daemon {
       closePreview: this.closePreview.bind(this),
       getStatus: this.getStatus.bind(this),
       rollback: this.rollback.bind(this),
-      drainAskAI: async () => ({ items: [], leases: {} }),
-      resolveAskAI: async () => undefined,
+      drainAskAI: async () => this.queue.drain(),
+      resolveAskAI: async (req) => {
+        const resolveInput = {
+          askId: req.askId,
+          leaseId: req.leaseId,
+          outcome: req.outcome,
+          summary: req.summary,
+          ...(req.commitId !== undefined ? { commitId: req.commitId } : {}),
+        };
+        const item = this.queue.resolve(resolveInput);
+        // Broadcast to all WS clients. sessionId '*' is a wire sentinel — clients match by askId.
+        broadcastAskAIResolved(this.wsServer!, {
+          sessionId: '*',
+          askId: item.askId,
+          outcome: item.outcome!,
+          summary: item.summary ?? '',
+          ...(item.commitId !== undefined ? { commitId: item.commitId } : {}),
+        });
+      },
       ...(this.opts.editorAssetsRoot !== undefined ? { editorAssetsRoot: this.opts.editorAssetsRoot } : {}),
     });
     this.wsServer = attachWebSocket(this.httpServer, {
       getSession: (id) => this.supervisor.list().find((s) => s.id === id) ?? null,
       getPipeline: (id) => this.editPipelines.get(id) ?? null,
       daemonPort: () => this.actualPort!,
+      getQueue: () => this.queue,
     });
 
     await new Promise<void>((r) => this.httpServer!.listen(port, '127.0.0.1', r));

@@ -15,6 +15,7 @@ describe('broadcastFileChanged', () => {
       getSession: (id) => (id === 's1' ? session : null),
       getPipeline: (id) => (id === 's1' ? pipeline : null),
       daemonPort: () => port,
+      getQueue: () => { throw new Error('getQueue not used in this test'); },
     });
 
     const client = new WebSocket(`ws://127.0.0.1:${port}/ws`);
