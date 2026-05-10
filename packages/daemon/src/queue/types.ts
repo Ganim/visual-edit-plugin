@@ -20,7 +20,8 @@ export type WalOp =
   | { op: 'enqueue'; askId: string; element: string; filePath: string; prompt: string; timestamp: string }
   | { op: 'lease'; askId: string; leaseId: string; expiresAt: string; timestamp: string }
   | { op: 'resolve'; askId: string; leaseId: string; outcome: AskAIOutcome; summary: string; commitId?: string; timestamp: string }
-  | { op: 'lease-expired'; askId: string; timestamp: string };
+  | { op: 'lease-expired'; askId: string; timestamp: string }
+  | { op: 'snapshot-ref'; snapshotPath: string; snapshotSha256: string; timestamp: string };
 
 export interface WalEntry {
   seq: number;

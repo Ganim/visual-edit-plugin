@@ -2,12 +2,14 @@ import { randomBytes } from 'node:crypto';
 import { CODES, VisualEditError, makeEnvelope } from '@visual-edit/diagnostics';
 import { appendWalEntry } from './wal.js';
 import { replayWal } from './replay.js';
+import { shouldCompact, compactWal } from './compaction.js';
 import type { AskAIItem, AskAIOutcome } from './types.js';
 
 const DEFAULT_LEASE_TTL_MS = 15 * 60_000;
 
 export interface QueueManagerOpts {
   leaseTtlMs?: number;
+  compactionThresholds?: { maxEntries?: number; maxBytes?: number };
 }
 
 export interface EnqueueInput {
@@ -32,13 +34,20 @@ export interface DrainResult {
 export class QueueManager {
   private items = new Map<string, AskAIItem>();
   private leaseTtlMs: number;
+  private compactionThresholds: { maxEntries?: number; maxBytes?: number };
 
   constructor(private root: string, opts: QueueManagerOpts = {}) {
     this.leaseTtlMs = opts.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS;
+    this.compactionThresholds = opts.compactionThresholds ?? {};
     for (const it of replayWal(root)) this.items.set(it.askId, it);
   }
 
   list(): AskAIItem[] { return [...this.items.values()]; }
+
+  private maybeCompact(): void {
+    if (!shouldCompact(this.root, this.compactionThresholds)) return;
+    compactWal(this.root, [...this.items.values()]);
+  }
 
   enqueue(input: EnqueueInput): AskAIItem {
     const askId = randomBytes(4).toString('hex');
@@ -53,6 +62,7 @@ export class QueueManager {
       enqueuedAt: timestamp,
     };
     this.items.set(askId, item);
+    this.maybeCompact();
     return item;
   }
 
@@ -68,6 +78,7 @@ export class QueueManager {
         count++;
       }
     }
+    if (count > 0) this.maybeCompact();
     return count;
   }
 
@@ -89,6 +100,7 @@ export class QueueManager {
       leases[it.askId] = leaseId;
       items.push({ ...it });
     }
+    if (items.length > 0) this.maybeCompact();
     return { items, leases };
   }
 
@@ -127,6 +139,7 @@ export class QueueManager {
     item.resolvedAt = timestamp;
     delete item.leaseId;
     delete item.leaseExpiresAt;
+    this.maybeCompact();
     return { ...item };
   }
 }
