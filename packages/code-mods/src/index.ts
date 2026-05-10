@@ -12,3 +12,6 @@ export type {
 } from './types.js';
 export { planEdits } from './planEdits.js';
 export { apply, type ApplyResult } from './apply.js';
+export { assertEditEquivalence } from './invariants/astEquivalence.js';
+export { assertCommentsPreserved } from './invariants/commentPreservation.js';
+export { assertWhitespacePreservedOutsidePatches } from './invariants/whitespacePreservation.js';
