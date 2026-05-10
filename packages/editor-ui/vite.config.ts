@@ -10,5 +10,5 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: { output: { manualChunks: undefined } },
   },
-  test: { environment: 'jsdom' },
+  test: { environment: 'jsdom', setupFiles: ['./tests/setup.ts'] },
 });
