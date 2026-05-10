@@ -8,3 +8,4 @@ export type {
   MockSchema,
 } from './project.js';
 export type { PreviewSession, DaemonStatus } from './runtime.js';
+export type { Edit, ClassNameEdit, StyleEdit } from './edit.js';

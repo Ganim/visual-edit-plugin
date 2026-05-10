@@ -10,3 +10,5 @@ export type {
   TextPatch,
   InstrumentResult,
 } from './types.js';
+export { planEdits } from './planEdits.js';
+export { apply, type ApplyResult } from './apply.js';
