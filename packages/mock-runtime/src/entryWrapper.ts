@@ -10,6 +10,31 @@ export interface BuildEntryWrapperInput {
   sessionId: string;
 }
 
+const BRIDGE_SOURCE = `
+function __veCollectRects() {
+  const out = {};
+  for (const el of document.querySelectorAll('[data-vid]')) {
+    const r = el.getBoundingClientRect();
+    out[el.getAttribute('data-vid')] = { x: r.left, y: r.top, width: r.width, height: r.height };
+  }
+  window.parent.postMessage({ type: 've-rects', rects: out }, '*');
+}
+function __veInstallBridge() {
+  __veCollectRects();
+  const mo = new MutationObserver(() => __veCollectRects());
+  mo.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-vid', 'class', 'style'] });
+  const ro = new ResizeObserver(() => __veCollectRects());
+  ro.observe(document.documentElement);
+  window.addEventListener('scroll', () => __veCollectRects(), { passive: true });
+  window.addEventListener('resize', () => __veCollectRects(), { passive: true });
+  window.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 've-rects-request') __veCollectRects();
+  });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', __veInstallBridge);
+else __veInstallBridge();
+`;
+
 export function buildEntryWrapper(input: BuildEntryWrapperInput): string {
   const lines: string[] = [];
   lines.push(`// Auto-generated synthetic entry by @visual-edit/mock-runtime — do not edit.`);
@@ -34,5 +59,6 @@ export function buildEntryWrapper(input: BuildEntryWrapperInput): string {
   }
   lines.push(`createRoot(document.getElementById('root')!).render(wrapped);`);
   lines.push('');
+  lines.push(BRIDGE_SOURCE);
   return lines.join('\n');
 }
