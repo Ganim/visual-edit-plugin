@@ -123,16 +123,24 @@ describe('Phase 1.B acceptance: edit + commit + invariants', () => {
     const { instrumented: instrumentedBefore, sourceMap: smBefore } = instrument(originalHome, HOME_TSX);
     const targetVid = Object.entries(smBefore).find(([, e]) => e.tagName === 'h1')?.[0];
     expect(targetVid, 'h1 vid not found in re-instrumented sourceMap').toBeDefined();
-    const patches = planEdits(instrumentedBefore, smBefore, [
-      { kind: 'className', element: targetVid!, newValue: 'text-red-500' },
-    ]);
-    const expected = apply(instrumentedBefore, patches);
+    // planEdits now takes a single PlanEditsInput object and returns PlannedFile[].
+    const plannedFiles = planEdits({
+      filePath: HOME_TSX,
+      source: instrumentedBefore,
+      sourceMap: smBefore,
+      edits: [{ kind: 'className', element: targetVid!, newValue: 'text-red-500' }],
+      resolvePath: (importPath) => resolve(dirname(HOME_TSX), importPath),
+      readExternalFile: (absPath) => readFileSync(absPath, 'utf8'),
+    });
+    // Extract the patches for the home file (the only target for a className edit).
+    const homePatches = plannedFiles.find((f) => f.filePath === HOME_TSX)?.patches ?? [];
+    const expected = apply(instrumentedBefore, homePatches);
 
     // The on-disk content should match instrumented + edit applied.
     expect(after).toBe(expected.after);
     expect(() => assertEditEquivalence(instrumentedBefore, after, [targetVid!])).not.toThrow();
     expect(() => assertCommentsPreserved(instrumentedBefore, after)).not.toThrow();
-    expect(() => assertWhitespacePreservedOutsidePatches(instrumentedBefore, after, patches)).not.toThrow();
+    expect(() => assertWhitespacePreservedOutsidePatches(instrumentedBefore, after, homePatches)).not.toThrow();
 
     // 13. Commit log must have an entry for the user-driven commit.
     const log = readCommitLog(EXAMPLE_ROOT);
