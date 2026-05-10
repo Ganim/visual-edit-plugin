@@ -57,7 +57,18 @@ const StyleEditSchema = z.object({
   element: SHORT_HEX,
   newObjectText: z.string(),
 });
-const EditSchema = z.union([ClassNameEditSchema, StyleEditSchema]);
+const CssModuleEditSchema = z.object({
+  kind: z.literal('css-module'),
+  element: SHORT_HEX,
+  binding: z.string().min(1),
+  newRuleBody: z.string(),
+});
+const StyledPropEditSchema = z.object({
+  kind: z.literal('styled-prop'),
+  element: SHORT_HEX,
+  newTemplateContent: z.string(),
+});
+const EditSchema = z.union([ClassNameEditSchema, StyleEditSchema, CssModuleEditSchema, StyledPropEditSchema]);
 
 export const WsEditMessage = z.object({
   kind: z.literal('edit'),

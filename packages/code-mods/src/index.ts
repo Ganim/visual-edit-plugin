@@ -20,3 +20,4 @@ export { writeBackup, readBackup, listBackups, type BackupOps } from './backups.
 export { appendCommit, readCommitLog, findCommit, type CommitLogEntry } from './commitLog.js';
 export { commit, type CommitInput, type CommitResult, commitMultiFile, type MultiFileCommitInput, type MultiFileCommitResult } from './commit.js';
 export { rollback, type RollbackInput, type RollbackResult } from './rollback.js';
+export { findCssRuleRange, type CssRuleRange } from './cssModuleParser.js';
