@@ -41,6 +41,10 @@ describe('protocol', () => {
       sessionId: 's',
       url: 'http://localhost:5180/?s=s',
       status: 'ready',
+      filePath: '/abs/App.tsx',
+      sourceText: 'export const App = () => <div />;\n',
+      sourceMap: {},
+      editorUrl: 'http://localhost:5170/__editor/?session=s',
     });
     expect(m.status).toBe('ready');
   });
