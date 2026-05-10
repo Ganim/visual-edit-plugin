@@ -12,7 +12,8 @@ import { LockHeartbeat } from './lockHeartbeat.js';
 import { findFreePort } from './portFinder.js';
 import { PreviewSupervisor } from './previewSupervisor.js';
 import { createHttpServer } from './http.js';
-import { attachWebSocket, broadcastFileChanged, broadcastAskAIResolved } from './ws.js';
+import { attachWebSocket, broadcastFileChanged, broadcastAskAIResolved, broadcastConfigChanged } from './ws.js';
+import { ConfigReloader, type ConfigChangedEvent } from './configReloader.js';
 import { EditPipeline } from './editPipeline.js';
 import { FileWatcher } from './fileWatcher.js';
 import { QueueManager } from './queue/queueManager.js';
@@ -44,6 +45,7 @@ export class Daemon {
   private heartbeat?: LockHeartbeat;
   private leaseTimer?: LeaseTimer;
   private connectedPort?: number;
+  private configReloader?: ConfigReloader;
 
   constructor(private opts: DaemonOptions) {
     this.logger = opts.logger ?? new Logger({ fsRoot: opts.root });
@@ -172,6 +174,20 @@ export class Daemon {
           });
         }
         invalidateAnalyzer(this.opts.root, e.filePath);
+      });
+
+      this.configReloader = new ConfigReloader(this.opts.root, this.fileWatcher);
+      await this.configReloader.attach();
+      this.configReloader.on('changed', (e: ConfigChangedEvent) => {
+        if (e.error) {
+          this.logger.error('config reload failed', { code: 'VE_CONFIG_001', traceId: 'na' });
+          return;
+        }
+        if (e.config && this.projectInfo) {
+          this.projectInfo = { ...this.projectInfo, config: e.config };
+          if (this.wsServer) broadcastConfigChanged(this.wsServer);
+          this.logger.info('config reloaded', { mode: 'soft' });
+        }
       });
 
       await writeLock(this.opts.root, { pid: process.pid, port, daemonVersion: DAEMON_VERSION });

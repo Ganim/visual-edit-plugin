@@ -23,6 +23,7 @@ export {
   WsAskAIMessage,
   WsAskAIQueuedMessage,
   WsAskAIResolvedMessage,
+  WsConfigChangedMessage,
   WsMessage,
 } from './ws.js';
 export type { ElementSourceMap } from './ws.js';

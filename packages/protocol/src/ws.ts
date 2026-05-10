@@ -171,6 +171,13 @@ export const WsAskAIResolvedMessage = z.object({
 });
 export type WsAskAIResolvedMessage = z.infer<typeof WsAskAIResolvedMessage>;
 
+export const WsConfigChangedMessage = z.object({
+  kind: z.literal('config-changed'),
+  sessionId: z.string().min(1),
+  willRestart: z.boolean(),
+});
+export type WsConfigChangedMessage = z.infer<typeof WsConfigChangedMessage>;
+
 export const WsMessage = z.union([
   WsHelloMessage,
   WsSnapshotMessage,
@@ -185,6 +192,7 @@ export const WsMessage = z.union([
   WsAskAIMessage,
   WsAskAIQueuedMessage,
   WsAskAIResolvedMessage,
+  WsConfigChangedMessage,
 ]);
 export type WsMessage = z.infer<typeof WsMessage>;
 

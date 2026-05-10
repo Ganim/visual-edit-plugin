@@ -13,6 +13,7 @@ import {
   type WsFileChangedMessage,
   type WsAskAIQueuedMessage,
   type WsAskAIResolvedMessage,
+  type WsConfigChangedMessage,
 } from '@visual-edit/protocol';
 import type { PreviewSession } from '@visual-edit/shared';
 import type { EditPipeline } from './editPipeline.js';
@@ -191,6 +192,18 @@ export function broadcastFileChanged(wss: WebSocketServer, msg: Omit<WsFileChang
  */
 export function broadcastAskAIResolved(wss: WebSocketServer, msg: Omit<WsAskAIResolvedMessage, 'kind'>): void {
   const wire: WsAskAIResolvedMessage = { kind: 'ask-ai-resolved', ...msg };
+  const payload = JSON.stringify(wire);
+  for (const client of wss.clients) {
+    if (client.readyState === client.OPEN) client.send(payload);
+  }
+}
+
+/**
+ * Broadcast a config-changed event to all WS clients.
+ * sessionId '*' signals all clients; willRestart is always true for soft reloads.
+ */
+export function broadcastConfigChanged(wss: WebSocketServer): void {
+  const wire: WsConfigChangedMessage = { kind: 'config-changed', sessionId: '*', willRestart: true };
   const payload = JSON.stringify(wire);
   for (const client of wss.clients) {
     if (client.readyState === client.OPEN) client.send(payload);
