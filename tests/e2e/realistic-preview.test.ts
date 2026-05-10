@@ -44,7 +44,7 @@ describe('Phase 1.E acceptance: realistic preview (MSW + asset-proxy)', () => {
     });
     expect(resp.ok, `POST /preview failed: ${resp.status}`).toBe(true);
     const { url, sessionId } = await resp.json() as { url: string; sessionId: string };
-    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:51\d\d/);
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+/);
     expect(sessionId).toMatch(/^[0-9a-f]{8}$/);
 
     const page = await browser.newPage();

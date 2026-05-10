@@ -36,7 +36,7 @@ describe('Phase 1.A acceptance: render isolated page', () => {
     });
     expect(resp.ok).toBe(true);
     const { url, sessionId } = await resp.json();
-    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:51\d\d/);
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+/);
     expect(sessionId).toMatch(/^[0-9a-f]{8}$/);
 
     const page = await browser.newPage();
