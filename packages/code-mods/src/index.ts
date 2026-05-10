@@ -16,3 +16,4 @@ export { assertEditEquivalence } from './invariants/astEquivalence.js';
 export { assertCommentsPreserved } from './invariants/commentPreservation.js';
 export { assertWhitespacePreservedOutsidePatches } from './invariants/whitespacePreservation.js';
 export { runEditPipeline, type PipelineInput, type PipelineResult } from './pipeline.js';
+export { writeBackup, readBackup, listBackups, type BackupOps } from './backups.js';
