@@ -78,19 +78,23 @@ export function planEdits(input: PlanEditsInput): PlannedFile[] {
         reason: `css-module rule update for .${edit.binding} in ${absPath}`,
       });
     } else if (edit.kind === 'styled-prop') {
-      // Task 7-8 wires this. For now, refuse — styledComponent is always null after Task 1.
       if (!entry.styledComponent) {
+        // Defer cross-file refusal logic to Task 8 — for now, throw VE_CODEMOD_001
         throw new VisualEditError(makeEnvelope({
           code: CODES.VE_CODEMOD_001_UNKNOWN_VID,
-          message: `[VE_CODEMOD_001]: planEdits: element '${edit.element}' has no styled-component binding (styled-prop edit requires Task 7+)`,
+          message: `[VE_CODEMOD_001]: element has no styled-component definition`,
           severity: 'error',
           recovery: 'user-action',
           blame: 'tool',
-          hint: 'styled-prop edit target is not yet implemented for this element.',
         }));
       }
-      // placeholder — Task 7 will implement full styled-prop patch
-      throw new Error('planEdits: styled-prop edit not yet implemented');
+      ensureFile(input.filePath, input.source);
+      byFile.get(input.filePath)!.push({
+        start: entry.styledComponent.templateStart,
+        end: entry.styledComponent.templateEnd,
+        replacement: edit.newTemplateContent,
+        reason: `update styled.${entry.tagName} template`,
+      });
     } else {
       const _exhaustive: never = edit;
       throw new Error(`planEdits: unsupported edit kind: ${JSON.stringify(_exhaustive)}`);

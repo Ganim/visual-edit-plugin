@@ -6,6 +6,7 @@ import type {
   ElementSourceMap,
   ElementSourceMapEntry,
   InstrumentResult,
+  StyledComponentRange,
   TextPatch,
 } from './types.js';
 
@@ -50,6 +51,7 @@ export function instrument(source: string, filePath: string): InstrumentResult {
 
   // Pass 2: re-parse instrumented, build sourceMap with positions valid in instrumented.
   const sf2 = ts.createSourceFile(filePath, instrumented, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const styledComponents = findStyledComponents(sf2);
   const sourceMap: ElementSourceMap = {};
   const visit2 = (node: ts.Node): void => {
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
@@ -73,7 +75,7 @@ export function instrument(source: string, filePath: string): InstrumentResult {
           styleAttr: findAttrRange(node, sf2, 'style'),
           attrsInsertPos,
           cssModule: cssModuleBinding,
-          styledComponent: null,
+          styledComponent: styledComponents.get(tagName) ?? null,
         };
         sourceMap[vid] = entry;
       }
@@ -83,6 +85,56 @@ export function instrument(source: string, filePath: string): InstrumentResult {
   visit2(sf2);
 
   return { instrumented, sourceMap };
+}
+
+/**
+ * Walk top-level statements looking for:
+ *   const X = styled.tag`...`   (PropertyAccessExpression tag)
+ *   const X = styled(...)`...`  (CallExpression tag whose callee is `styled`)
+ * Skip any tagged template that has interpolations (TemplateExpression);
+ * only NoSubstitutionTemplateLiteral is supported.
+ *
+ * Returns a Map from component name → StyledComponentRange (positions of the
+ * template literal content — between the backticks, exclusive).
+ */
+export function findStyledComponents(sf: ts.SourceFile): Map<string, StyledComponentRange> {
+  const result = new Map<string, StyledComponentRange>();
+
+  for (const stmt of sf.statements) {
+    if (!ts.isVariableStatement(stmt)) continue;
+    const decls = stmt.declarationList.declarations;
+    if (decls.length !== 1) continue;
+    const decl = decls[0]!;
+    if (!ts.isIdentifier(decl.name)) continue;
+    const init = decl.initializer;
+    if (!init || !ts.isTaggedTemplateExpression(init)) continue;
+
+    // Accept tagged templates only if the template is a NoSubstitutionTemplateLiteral
+    // (i.e., no interpolations).
+    if (!ts.isNoSubstitutionTemplateLiteral(init.template)) continue;
+
+    // Check that the tag is styled.X or styled(...)
+    const tag = init.tag;
+    const isStyledAccess =
+      ts.isPropertyAccessExpression(tag) &&
+      ts.isIdentifier(tag.expression) &&
+      tag.expression.text === 'styled';
+    const isStyledCall =
+      ts.isCallExpression(tag) &&
+      ts.isIdentifier(tag.expression) &&
+      tag.expression.text === 'styled';
+
+    if (!isStyledAccess && !isStyledCall) continue;
+
+    const componentName = decl.name.text;
+    // The template literal spans from the opening backtick (+1) to the closing backtick (-1).
+    const templateStart = init.template.getStart(sf) + 1;
+    const templateEnd = init.template.getEnd() - 1;
+
+    result.set(componentName, { componentName, templateStart, templateEnd });
+  }
+
+  return result;
 }
 
 function findCssModuleImports(sf: ts.SourceFile): Map<string, string> {
