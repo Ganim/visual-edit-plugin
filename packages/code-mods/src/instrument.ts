@@ -11,6 +11,7 @@ import type {
 const VID_ATTR = 'data-vid';
 
 export function instrument(source: string, filePath: string): InstrumentResult {
+  // Pass 1: scan source, decide which elements need new vids, emit patches.
   const sf1 = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const patches: TextPatch[] = [];
   const visit1 = (node: ts.Node): void => {
@@ -42,6 +43,7 @@ export function instrument(source: string, filePath: string): InstrumentResult {
 
   const instrumented = applyPatchesToString(source, patches);
 
+  // Pass 2: re-parse instrumented, build sourceMap with positions valid in instrumented.
   const sf2 = ts.createSourceFile(filePath, instrumented, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const sourceMap: ElementSourceMap = {};
   const visit2 = (node: ts.Node): void => {
@@ -95,7 +97,7 @@ function findAttrRange(
     if (!ts.isJsxAttribute(attr)) continue;
     if (attr.name.getText(sf) !== attrName) continue;
     const initializer = attr.initializer;
-    if (!initializer) return null;
+    if (!initializer) return null; // shorthand attribute (e.g. `<input disabled />`)
     if (ts.isStringLiteral(initializer)) {
       return {
         attrStart: attr.getStart(sf),
@@ -120,6 +122,7 @@ function findAttrRange(
 }
 
 function applyPatchesToString(source: string, patches: TextPatch[]): string {
+  // Apply in descending order of start to keep earlier offsets stable.
   const sorted = [...patches].sort((a, b) => b.start - a.start);
   let out = source;
   for (const p of sorted) {
