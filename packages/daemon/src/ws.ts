@@ -72,17 +72,17 @@ export function attachWebSocket(http: Server, handlers: WsHandlers): WebSocketSe
         if (!edit.success) return sendError(socket, sessionId, 'VE_PROTOCOL_002', 'invalid edit message', undefined);
         try {
           const dr = await pipeline.planAndApply(edit.data.edits);
-          // Wire protocol uses the page-file entry (flat shape); multi-file support is internal.
-          const pageFile = dr.files.find((f) => f.filePath === pipeline.getFilePath()) ?? dr.files[0]!;
           const reply: WsDryRunMessage = {
             kind: 'dry-run',
             requestId: edit.data.requestId,
             sessionId,
             planId: dr.planId,
-            filePath: pipeline.getFilePath(),
-            patches: pageFile.patches,
-            beforeHash: pageFile.beforeHash,
-            afterHash: pageFile.afterHash,
+            files: dr.files.map((f) => ({
+              filePath: f.filePath,
+              patches: f.patches,
+              beforeHash: f.beforeHash,
+              afterHash: f.afterHash,
+            })),
           };
           socket.send(JSON.stringify(reply));
         } catch (err) {

@@ -23,15 +23,22 @@ describe('ws editing schemas', () => {
 
   it('parses a dry-run reply with patches + hashes', () => {
     expect(() => WsDryRunMessage.parse({
-      kind: 'dry-run',
-      requestId: 'req1',
-      sessionId: 's1',
-      planId: 'plan1',
-      filePath: '/abs/Home.tsx',
-      patches: [{ start: 0, end: 1, replacement: 'x', reason: 'r' }],
-      beforeHash: 'a'.repeat(64),
-      afterHash: 'b'.repeat(64),
+      kind: 'dry-run', requestId: 'r', sessionId: 's', planId: 'p',
+      files: [{
+        filePath: '/X.tsx', patches: [{ start: 0, end: 1, replacement: 'x', reason: 'r' }],
+        beforeHash: 'a'.repeat(64), afterHash: 'b'.repeat(64),
+      }],
     })).not.toThrow();
+  });
+
+  it('parses a dry-run with multiple files', () => {
+    WsDryRunMessage.parse({
+      kind: 'dry-run', requestId: 'r', sessionId: 's', planId: 'p',
+      files: [
+        { filePath: '/X.tsx', patches: [], beforeHash: 'a'.repeat(64), afterHash: 'b'.repeat(64) },
+        { filePath: '/X.module.css', patches: [], beforeHash: 'c'.repeat(64), afterHash: 'd'.repeat(64) },
+      ],
+    });
   });
 
   it('parses commit + commit-ok + commit-uncertain', () => {

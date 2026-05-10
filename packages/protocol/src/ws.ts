@@ -74,15 +74,19 @@ const TextPatchSchema = z.object({
   reason: z.string(),
 });
 
+const DryRunFileSchema = z.object({
+  filePath: z.string().min(1),
+  patches: z.array(TextPatchSchema),
+  beforeHash: HEX_64,
+  afterHash: HEX_64,
+});
+
 export const WsDryRunMessage = z.object({
   kind: z.literal('dry-run'),
   requestId: z.string().min(1),
   sessionId: z.string().min(1),
   planId: z.string().min(1),
-  filePath: z.string().min(1),
-  patches: z.array(TextPatchSchema),
-  beforeHash: HEX_64,
-  afterHash: HEX_64,
+  files: z.array(DryRunFileSchema).min(1),
 });
 export type WsDryRunMessage = z.infer<typeof WsDryRunMessage>;
 
