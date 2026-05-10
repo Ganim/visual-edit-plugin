@@ -43,15 +43,19 @@ export function connect(url: string, sessionId: string): WsClient {
         s.setError(`commit-uncertain: ${msg['lastError']}`);
         s.clearDryRun();
         return;
-      case 'ask-ai-queued':
-        s.addAskAiItem({
+      case 'ask-ai-queued': {
+        const oldKey = `pending:${msg['requestId'] as string}`;
+        const cur = useStore.getState().askAiItems[oldKey];
+        if (!cur) return; // unmatched ack — ignore
+        s.replaceAskAiItem(oldKey, {
           askId: msg['askId'] as string,
-          element: '',
-          prompt: '',
+          element: cur.element,
+          prompt: cur.prompt,
           enqueuedAt: msg['enqueuedAt'] as string,
           state: 'pending',
         });
         return;
+      }
       case 'ask-ai-resolved':
         s.updateAskAiResolved(msg['askId'] as string, {
           outcome: msg['outcome'] as AskAiItemUI['outcome'],

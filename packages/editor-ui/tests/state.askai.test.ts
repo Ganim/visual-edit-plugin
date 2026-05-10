@@ -16,4 +16,11 @@ describe('ask-ai state', () => {
     expect(it.state).toBe('resolved');
     expect(it.outcome).toBe('committed');
   });
+
+  it('replaceAskAiItem swaps the optimistic key with the real askId', () => {
+    useStore.getState().addAskAiItem({ askId: 'pending:r1', element: 'v', prompt: 'p', enqueuedAt: 't', state: 'pending' });
+    useStore.getState().replaceAskAiItem('pending:r1', { askId: 'real', element: 'v', prompt: 'p', enqueuedAt: 't2', state: 'pending' });
+    expect(useStore.getState().askAiItems['pending:r1']).toBeUndefined();
+    expect(useStore.getState().askAiItems['real']).toBeDefined();
+  });
 });

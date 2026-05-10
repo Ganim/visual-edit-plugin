@@ -43,6 +43,7 @@ export interface EditorState {
   setError: (msg: string) => void;
   setStatus: (s: EditorState['status']) => void;
   addAskAiItem: (item: AskAiItemUI) => void;
+  replaceAskAiItem: (oldKey: string, newItem: AskAiItemUI) => void;
   updateAskAiResolved: (askId: string, fields: { outcome: AskAiItemUI['outcome']; summary?: string; commitId?: string }) => void;
 }
 
@@ -77,6 +78,12 @@ export const useStore = create<EditorState>()((set) => ({
   setError: (msg) => set({ lastError: msg }),
   setStatus: (status) => set({ status }),
   addAskAiItem: (item) => set((s) => ({ askAiItems: { ...s.askAiItems, [item.askId]: item } })),
+  replaceAskAiItem: (oldKey, newItem) => set((s) => {
+    const next = { ...s.askAiItems };
+    delete next[oldKey];
+    next[newItem.askId] = newItem;
+    return { askAiItems: next };
+  }),
   updateAskAiResolved: (askId, fields) => set((s) => {
     const cur = s.askAiItems[askId];
     if (!cur) return s;
