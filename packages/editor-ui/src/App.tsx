@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Iframe } from './canvas/Iframe.js';
 import { Overlay } from './canvas/Overlay.js';
+import { AiPromptPanel } from './panels/AiPromptPanel.js';
 import { PropertiesPanel } from './panels/PropertiesPanel.js';
 import { connect, type WsClient } from './wsClient.js';
 
@@ -18,12 +19,15 @@ export function App(): JSX.Element {
   }, []);
 
   return (
-    <div className="flex h-screen">
-      <div className="flex-1 relative">
-        <Iframe />
-        <Overlay />
+    <div className="flex flex-col h-screen">
+      <div className="flex flex-1">
+        <div className="flex-1 relative">
+          <Iframe />
+          <Overlay />
+        </div>
+        {client && <PropertiesPanel client={client} />}
       </div>
-      {client && <PropertiesPanel client={client} />}
+      {client && <AiPromptPanel client={client} />}
     </div>
   );
 }
