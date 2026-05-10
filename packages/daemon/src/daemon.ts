@@ -6,6 +6,7 @@ import type { ProjectInfo } from '@visual-edit/shared';
 import type { AdapterInput } from '@visual-edit/adapter-vite';
 import { readCommitLog, rollback as codeModsRollback } from '@visual-edit/code-mods';
 import { writeLock, readLock, removeLock } from './lockFile.js';
+import { writeStartupSnapshot } from './startupSnapshot.js';
 import { decideLockAction } from './lockTakeover.js';
 import { LockHeartbeat } from './lockHeartbeat.js';
 import { findFreePort } from './portFinder.js';
@@ -45,7 +46,7 @@ export class Daemon {
   private connectedPort?: number;
 
   constructor(private opts: DaemonOptions) {
-    this.logger = opts.logger ?? new Logger();
+    this.logger = opts.logger ?? new Logger({ fsRoot: opts.root });
     this.queue = new QueueManager(opts.root);
     this.leaseTimer = new LeaseTimer(this.queue);
   }
@@ -193,6 +194,8 @@ export class Daemon {
       }
       throw err;
     }
+
+    writeStartupSnapshot(this.opts.root, { daemonVersion: DAEMON_VERSION });
 
     this.heartbeat = new LockHeartbeat(this.opts.root);
     this.heartbeat.start();
