@@ -15,6 +15,7 @@ import { attachWebSocket, broadcastFileChanged, broadcastAskAIResolved } from '.
 import { EditPipeline } from './editPipeline.js';
 import { FileWatcher } from './fileWatcher.js';
 import { QueueManager } from './queue/queueManager.js';
+import { LeaseTimer } from './queue/leaseTimer.js';
 
 const DAEMON_VERSION = '0.0.0';
 
@@ -40,11 +41,13 @@ export class Daemon {
   private queue: QueueManager;
   private mode: 'pre-start' | 'bound' | 'connected' | 'took-over' = 'pre-start';
   private heartbeat?: LockHeartbeat;
+  private leaseTimer?: LeaseTimer;
   private connectedPort?: number;
 
   constructor(private opts: DaemonOptions) {
     this.logger = opts.logger ?? new Logger();
     this.queue = new QueueManager(opts.root);
+    this.leaseTimer = new LeaseTimer(this.queue);
   }
 
   /** Current lifecycle mode. */
@@ -171,6 +174,8 @@ export class Daemon {
     this.heartbeat = new LockHeartbeat(this.opts.root);
     this.heartbeat.start();
 
+    this.leaseTimer!.start();
+
     this.logger.info('daemon started', { port, root: this.opts.root, pid: process.pid });
 
     process.on('SIGTERM', () => this.stop().then(() => process.exit(0)));
@@ -197,6 +202,7 @@ export class Daemon {
     // QueueManager writes are individually fsync'd by appendWalEntry; no flush needed here.
     // 1.C does NOT implement WAL compaction (deferred to 1.D).
     this.heartbeat?.stop();
+    this.leaseTimer?.stop();
     await removeLock(this.opts.root);
     this.logger.info('daemon stopped');
   }

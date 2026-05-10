@@ -56,18 +56,26 @@ export class QueueManager {
     return item;
   }
 
-  drain(): DrainResult {
-    // 1) Expire any leases past TTL.
+  expireStaleLeases(): number {
     const now = Date.now();
+    let count = 0;
     for (const it of this.items.values()) {
       if (it.state === 'leased' && it.leaseExpiresAt && Date.parse(it.leaseExpiresAt) <= now) {
         appendWalEntry(this.root, { op: 'lease-expired', askId: it.askId, timestamp: new Date().toISOString() });
         it.state = 'pending';
         delete it.leaseId;
         delete it.leaseExpiresAt;
+        count++;
       }
     }
+    return count;
+  }
+
+  drain(): DrainResult {
+    // 1) Expire any leases past TTL.
+    this.expireStaleLeases();
     // 2) Lease all pending items.
+    const now = Date.now();
     const items: AskAIItem[] = [];
     const leases: Record<string, string> = {};
     for (const it of this.items.values()) {
