@@ -2,8 +2,19 @@ import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ProjectInfo, ProjectRoot } from '@visual-edit/shared';
 
+const cache = new Map<string, ProjectInfo>();
+
+export function invalidateAnalyzer(root: string, filePath?: string): void {
+  // For 1.D, any file change invalidates the whole cache for that root.
+  // Future: file-specific invalidation (per-file dependency tracking).
+  void filePath;
+  cache.delete(root);
+}
+
 export async function analyze(rootInput: string): Promise<ProjectInfo> {
   const root = rootInput as ProjectRoot;
+
+  if (cache.has(root)) return cache.get(root)!;
   const pkgJsonPath = join(root, 'package.json');
   const pkgRaw = await readFile(pkgJsonPath, 'utf8');
   const pkg = JSON.parse(pkgRaw) as Record<string, unknown>;
@@ -31,7 +42,7 @@ export async function analyze(rootInput: string): Promise<ProjectInfo> {
   const envFiles = await listEnvFiles(root);
   const packageManager = await detectPackageManager(root);
 
-  return {
+  const info: ProjectInfo = {
     root,
     framework,
     reactVersion,
@@ -44,6 +55,8 @@ export async function analyze(rootInput: string): Promise<ProjectInfo> {
     routes: [], // populated by findRoutes
     config: null, // populated by loadConfig
   };
+  cache.set(root, info);
+  return info;
 }
 
 async function readTsconfigPaths(

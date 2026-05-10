@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Logger } from '@visual-edit/diagnostics';
 import { CODES, VisualEditError, makeEnvelope } from '@visual-edit/diagnostics';
-import { analyze, loadConfig, findRoutes, discoverSchemas } from '@visual-edit/project-analyzer';
+import { analyze, loadConfig, findRoutes, discoverSchemas, invalidateAnalyzer } from '@visual-edit/project-analyzer';
 import type { ProjectInfo } from '@visual-edit/shared';
 import type { AdapterInput } from '@visual-edit/adapter-vite';
 import { readCommitLog, rollback as codeModsRollback } from '@visual-edit/code-mods';
@@ -167,6 +167,7 @@ export class Daemon {
           dirtySourceMap: true,
         });
       }
+      invalidateAnalyzer(this.opts.root, e.filePath);
     });
 
     await writeLock(this.opts.root, { pid: process.pid, port, daemonVersion: DAEMON_VERSION });
