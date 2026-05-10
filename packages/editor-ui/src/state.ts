@@ -27,7 +27,7 @@ export interface EditorState {
   selectedVid: string | null;
   rects: Record<string, Rect>;
   // Edits
-  pendingDryRun: { planId: string; afterHash: string } | null;
+  pendingDryRun: { planId: string; afterHashes: string[] } | null;
   staleSnapshot: boolean;
   lastError: string | null;
   // Ask-AI
@@ -37,7 +37,7 @@ export interface EditorState {
   selectVid: (vid: string | null) => void;
   setRect: (vid: string, rect: Rect) => void;
   setRects: (rects: Record<string, Rect>) => void;
-  setDryRun: (planId: string, afterHash: string) => void;
+  setDryRun: (planId: string, afterHashes: string[]) => void;
   clearDryRun: () => void;
   markStale: (sha256: string) => void;
   setError: (msg: string) => void;
@@ -72,7 +72,7 @@ export const useStore = create<EditorState>()((set) => ({
   selectVid: (vid) => set({ selectedVid: vid }),
   setRect: (vid, rect) => set((st) => ({ rects: { ...st.rects, [vid]: rect } })),
   setRects: (rects) => set({ rects }),
-  setDryRun: (planId, afterHash) => set({ pendingDryRun: { planId, afterHash } }),
+  setDryRun: (planId, afterHashes) => set({ pendingDryRun: { planId, afterHashes } }),
   clearDryRun: () => set({ pendingDryRun: null }),
   markStale: (_sha256) => set({ staleSnapshot: true, status: 'stale' }),
   setError: (msg) => set({ lastError: msg }),

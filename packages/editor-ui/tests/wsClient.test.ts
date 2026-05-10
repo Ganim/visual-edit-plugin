@@ -56,13 +56,17 @@ describe('wsClient', () => {
     const c = connect('ws://x/ws', 's1');
     const ws = MockWebSocket.instances[0]!;
     ws.fire('open');
-    ws.fire('message', JSON.stringify({ kind: 'dry-run', requestId: 'r', sessionId: 's1', planId: 'p1', filePath: '/x', patches: [], beforeHash: 'a'.repeat(64), afterHash: 'b'.repeat(64) }));
+    ws.fire('message', JSON.stringify({
+      kind: 'dry-run', requestId: 'r', sessionId: 's1', planId: 'p1',
+      files: [{ filePath: '/x', patches: [], beforeHash: 'a'.repeat(64), afterHash: 'b'.repeat(64) }],
+    }));
     expect(useStore.getState().pendingDryRun?.planId).toBe('p1');
+    expect(useStore.getState().pendingDryRun?.afterHashes).toEqual(['b'.repeat(64)]);
     void c;
   });
 
   it('commit-ok clears pendingDryRun', () => {
-    useStore.setState({ ...useStore.getInitialState(), pendingDryRun: { planId: 'p1', afterHash: 'a'.repeat(64) } });
+    useStore.setState({ ...useStore.getInitialState(), pendingDryRun: { planId: 'p1', afterHashes: ['a'.repeat(64)] } });
     connect('ws://x/ws', 's1');
     const ws = MockWebSocket.instances[0]!;
     ws.fire('open');

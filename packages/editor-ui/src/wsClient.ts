@@ -34,7 +34,10 @@ export function connect(url: string, sessionId: string): WsClient {
         });
         return;
       case 'dry-run':
-        s.setDryRun(msg['planId'] as string, msg['afterHash'] as string);
+        s.setDryRun(
+          msg['planId'] as string,
+          (msg['files'] as Array<{ afterHash: string }>).map((f) => f.afterHash),
+        );
         return;
       case 'commit-ok':
         s.clearDryRun();
