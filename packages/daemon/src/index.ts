@@ -7,5 +7,3 @@ export { attachWebSocket } from './ws.js';
 export { QueueManager } from './queue/queueManager.js';
 export { compactWal } from './queue/compaction.js';
 export { replayWal } from './queue/replay.js';
-/** @internal Test-only. Clears the in-process WAL sequence-number cache. */
-export { _resetSeqCache } from './queue/wal.js';

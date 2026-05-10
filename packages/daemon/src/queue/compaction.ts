@@ -31,6 +31,19 @@ export function shouldCompact(root: string, thresholds: CompactionThresholds = {
   return lineCount > (thresholds.maxEntries ?? DEFAULT_MAX_ENTRIES);
 }
 
+/**
+ * Write a compacted snapshot of the current queue state and reset the WAL.
+ *
+ * **Data-loss window (deferred to 1.F):** There is a brief window between the WAL
+ * truncation (`writeFileSync(walPath, '')`) and the `appendWalEntry` that writes the
+ * `snapshot-ref` record. A process crash inside this window leaves the WAL empty with
+ * no snapshot-ref, so `replayWal` starts from scratch and loses all queued items that
+ * were only in the snapshot file.
+ *
+ * Full fix (write snapshot-ref BEFORE truncating the old WAL) is deferred to Phase 1.F.
+ * For now, callers should treat compaction as a best-effort operation and avoid crashing
+ * the daemon during the compaction critical section.
+ */
 export function compactWal(
   root: string,
   items: AskAIItem[],

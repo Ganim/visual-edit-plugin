@@ -38,6 +38,12 @@ function detectForbiddenAccess(source: string): string | null {
     { name: "import 'fs/promises'",    rx: /from\s+['"](?:node:)?fs\/promises['"]/ },
     { name: "import 'child_process'",  rx: /from\s+['"](?:node:)?child_process['"]/ },
     { name: "import 'net'",            rx: /from\s+['"](?:node:)?net['"]/ },
+    { name: "import 'http'",           rx: /from\s+['"]http['"]/ },
+    { name: "import 'node:http'",      rx: /from\s+['"]node:http['"]/ },
+    { name: "import 'https'",          rx: /from\s+['"]https['"]/ },
+    { name: "import 'node:https'",     rx: /from\s+['"]node:https['"]/ },
+    { name: "import 'dgram'",          rx: /from\s+['"]dgram['"]/ },
+    { name: "import 'tls'",            rx: /from\s+['"]tls['"]/ },
     { name: 'fetch(',                  rx: /\bfetch\s*\(/ },
   ];
   for (const p of patterns) {

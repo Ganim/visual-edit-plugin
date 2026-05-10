@@ -8,7 +8,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Daemon, _resetSeqCache, QueueManager, compactWal, replayWal } from '@visual-edit/daemon';
+import { Daemon, QueueManager, compactWal, replayWal } from '@visual-edit/daemon';
+import { _resetSeqCache } from '../../packages/daemon/src/queue/wal.js';
 import { loadConfig } from '@visual-edit/project-analyzer';
 
 let tmp: string;

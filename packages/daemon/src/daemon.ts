@@ -5,7 +5,7 @@ import { analyze, loadConfig, findRoutes, discoverSchemas, invalidateAnalyzer } 
 import type { ProjectInfo } from '@visual-edit/shared';
 import type { AdapterInput } from '@visual-edit/adapter-vite';
 import { readCommitLog, rollback as codeModsRollback } from '@visual-edit/code-mods';
-import { writeLock, removeLock } from './lockFile.js';
+import { writeLock, readLock, removeLock } from './lockFile.js';
 import { decideLockAction } from './lockTakeover.js';
 import { LockHeartbeat } from './lockHeartbeat.js';
 import { findFreePort } from './portFinder.js';
@@ -173,6 +173,18 @@ export class Daemon {
     });
 
     await writeLock(this.opts.root, { pid: process.pid, port, daemonVersion: DAEMON_VERSION });
+    // Verify we won the race — two daemons starting simultaneously can both reach writeLock.
+    const verify = await readLock(this.opts.root);
+    if (!verify || verify.pid !== process.pid) {
+      throw new VisualEditError(makeEnvelope({
+        code: CODES.VE_FS_001_LOCK_HELD,
+        message: `[VE_FS_001]: lost race to another daemon (lock now held by pid ${verify?.pid})`,
+        severity: 'error',
+        recovery: 'automatic-retry',
+        blame: 'environment',
+        hint: 'Another daemon started concurrently. Retry with mode: "auto".',
+      }));
+    }
 
     this.heartbeat = new LockHeartbeat(this.opts.root);
     this.heartbeat.start();
@@ -211,6 +223,15 @@ export class Daemon {
   }
 
   async openPreview(req: { root: string; page: string }): Promise<{ url: string; sessionId: string; editorUrl: string }> {
+    if (this.mode === 'connected') {
+      throw new VisualEditError(makeEnvelope({
+        code: CODES.VE_FS_001_LOCK_HELD,
+        message: `[VE_FS_001]: this Daemon is in connect-only mode; openPreview is unsupported. Use the URL from start() to call the bound daemon's HTTP API directly.`,
+        severity: 'error',
+        recovery: 'user-action',
+        blame: 'tool',
+      }));
+    }
     if (!this.projectInfo) throw new Error('daemon not started');
     const matchedPage = this.projectInfo.routes.find((r) => r.route === req.page || r.filePath.endsWith(req.page));
     if (!matchedPage) {
@@ -252,6 +273,15 @@ export class Daemon {
   }
 
   async closePreview(req: { sessionId: string }): Promise<void> {
+    if (this.mode === 'connected') {
+      throw new VisualEditError(makeEnvelope({
+        code: CODES.VE_FS_001_LOCK_HELD,
+        message: `[VE_FS_001]: this Daemon is in connect-only mode; closePreview is unsupported. Use the URL from start() to call the bound daemon's HTTP API directly.`,
+        severity: 'error',
+        recovery: 'user-action',
+        blame: 'tool',
+      }));
+    }
     await this.supervisor.stop(req.sessionId);
     this.editPipelines.delete(req.sessionId);
   }
@@ -266,6 +296,15 @@ export class Daemon {
   }
 
   async rollback(req: { commitId: string }): Promise<void> {
+    if (this.mode === 'connected') {
+      throw new VisualEditError(makeEnvelope({
+        code: CODES.VE_FS_001_LOCK_HELD,
+        message: `[VE_FS_001]: this Daemon is in connect-only mode; rollback is unsupported. Use the URL from start() to call the bound daemon's HTTP API directly.`,
+        severity: 'error',
+        recovery: 'user-action',
+        blame: 'tool',
+      }));
+    }
     const log = readCommitLog(this.opts.root);
     const entry = log.find((e) => e.commitId === req.commitId && e.kind === 'commit');
     if (!entry) throw new Error(`unknown commitId ${req.commitId}`);

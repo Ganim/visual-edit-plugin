@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { CODES, VisualEditError, makeEnvelope } from '@visual-edit/diagnostics';
 import { readWalEntries } from './wal.js';
 import { readSnapshot } from './compaction.js';
 import type { AskAIItem } from './types.js';
@@ -26,7 +27,14 @@ export function replayWal(root: string): AskAIItem[] {
     const raw = readFileSync(ref.snapshotPath, 'utf8');
     const sha = createHash('sha256').update(raw).digest('hex');
     if (sha !== ref.snapshotSha256) {
-      throw new Error(`[VE_QUEUE_004]: snapshot sha mismatch — refusing to replay`);
+      throw new VisualEditError(makeEnvelope({
+        code: CODES.VE_QUEUE_004_SNAPSHOT_CORRUPT,
+        message: `[VE_QUEUE_004]: snapshot sha mismatch — refusing to replay`,
+        severity: 'fatal',
+        recovery: 'user-action',
+        blame: 'environment',
+        hint: 'Delete .visual-edit/queue-snapshot.json AND .visual-edit/queue.wal to reset.',
+      }));
     }
     const snapshot = readSnapshot(root);
     if (snapshot) {
