@@ -1,2 +1,5 @@
-// Public surface — populated by Tasks 7+.
-export {};
+export {
+  placeholder, passThrough, cached, dispatchStrategy,
+  type RemoteImageStrategy, type StrategyContext, type StrategyResponse, type CachedAsset,
+} from './strategies.js';
+

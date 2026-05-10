@@ -1,0 +1,46 @@
+import { describe, it, expect, vi } from 'vitest';
+import { placeholder, passThrough, cached, dispatchStrategy } from '../src/strategies.js';
+
+describe('asset strategies', () => {
+  it('placeholder returns a 1x1 SVG', async () => {
+    const r = await placeholder();
+    expect(r.status).toBe(200);
+    expect(r.contentType).toBe('image/svg+xml');
+    expect(typeof r.body === 'string' && r.body.includes('<svg')).toBe(true);
+  });
+
+  it('pass-through fetches upstream', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      status: 200,
+      arrayBuffer: async () => new ArrayBuffer(4),
+      headers: { get: () => 'image/png' },
+    } as unknown as Response);
+    const r = await passThrough({ url: 'http://x/a.png', cache: new Map() });
+    expect(r.status).toBe(200);
+    expect(r.contentType).toBe('image/png');
+    fetchSpy.mockRestore();
+  });
+
+  it('cached caches successful responses; second call hits the cache', async () => {
+    let callCount = 0;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      callCount++;
+      return {
+        status: 200,
+        arrayBuffer: async () => new ArrayBuffer(8),
+        headers: { get: () => 'image/jpeg' },
+      } as unknown as Response;
+    });
+    const cache = new Map();
+    await cached({ url: 'http://x/b.jpg', cache });
+    await cached({ url: 'http://x/b.jpg', cache });
+    expect(callCount).toBe(1);
+    fetchSpy.mockRestore();
+  });
+
+  it('dispatchStrategy throws on unknown strategy', async () => {
+    await expect(
+      dispatchStrategy('bogus' as never, { url: 'http://x', cache: new Map() }),
+    ).rejects.toThrow(/VE_ASSET_001/);
+  });
+});
