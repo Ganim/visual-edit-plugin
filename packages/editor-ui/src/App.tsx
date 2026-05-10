@@ -4,6 +4,7 @@ import { Overlay } from './canvas/Overlay.js';
 import { AiPromptPanel } from './panels/AiPromptPanel.js';
 import { PropertiesPanel } from './panels/PropertiesPanel.js';
 import { connect, type WsClient } from './wsClient.js';
+import { useStore } from './state.js';
 
 export function App(): JSX.Element {
   const [client, setClient] = useState<WsClient | null>(null);
@@ -16,6 +17,14 @@ export function App(): JSX.Element {
     const c = connect(wsUrl, sessionId);
     setClient(c);
     return () => c.close();
+  }, []);
+
+  // Expose askAiItems on window for e2e introspection (__VE_DEBUG_ASK_AI).
+  useEffect(() => {
+    const unsub = useStore.subscribe((s) => {
+      (window as Record<string, unknown>).__VE_DEBUG_ASK_AI = s.askAiItems;
+    });
+    return unsub;
   }, []);
 
   return (
