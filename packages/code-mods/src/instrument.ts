@@ -2,6 +2,7 @@ import ts from 'typescript';
 import { computeVid } from './vid.js';
 import type {
   AttrRange,
+  CssModuleBinding,
   ElementSourceMap,
   ElementSourceMapEntry,
   InstrumentResult,
@@ -11,6 +12,10 @@ import type {
 const VID_ATTR = 'data-vid';
 
 export function instrument(source: string, filePath: string): InstrumentResult {
+  // Pre-pass: collect CSS module imports before pass 1.
+  const sf0 = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const cssModuleImports = findCssModuleImports(sf0);
+
   // Pass 1: scan source, decide which elements need new vids, emit patches.
   const sf1 = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const patches: TextPatch[] = [];
@@ -54,16 +59,20 @@ export function instrument(source: string, filePath: string): InstrumentResult {
         const nodeStart = node.getStart(sf2);
         const nodeEnd = node.getEnd();
         const attrsInsertPos = node.attributes.getEnd();
+        const classNameAttr = findAttrRange(node, sf2, 'className');
+        const cssModuleBinding = classNameAttr
+          ? detectCssModuleBinding(node, cssModuleImports, sf2)
+          : null;
         const entry: ElementSourceMapEntry = {
           vid,
           tagName,
           nodeStart,
           nodeEnd,
           openingTagEnd: attrsInsertPos,
-          classNameAttr: findAttrRange(node, sf2, 'className'),
+          classNameAttr,
           styleAttr: findAttrRange(node, sf2, 'style'),
           attrsInsertPos,
-          cssModule: null,
+          cssModule: cssModuleBinding,
           styledComponent: null,
         };
         sourceMap[vid] = entry;
@@ -74,6 +83,40 @@ export function instrument(source: string, filePath: string): InstrumentResult {
   visit2(sf2);
 
   return { instrumented, sourceMap };
+}
+
+function findCssModuleImports(sf: ts.SourceFile): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const stmt of sf.statements) {
+    if (!ts.isImportDeclaration(stmt)) continue;
+    const importPath = (stmt.moduleSpecifier as ts.StringLiteral).text;
+    if (!importPath.endsWith('.module.css')) continue;
+    const clause = stmt.importClause;
+    if (clause?.name) {  // default import: import styles from '...'
+      map.set(clause.name.text, importPath);
+    }
+  }
+  return map;
+}
+
+function detectCssModuleBinding(
+  node: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+  cssModuleImports: Map<string, string>,
+  sf: ts.SourceFile,
+): CssModuleBinding | null {
+  for (const attr of node.attributes.properties) {
+    if (!ts.isJsxAttribute(attr)) continue;
+    if (attr.name.getText(sf) !== 'className') continue;
+    if (!attr.initializer || !ts.isJsxExpression(attr.initializer)) return null;
+    const expr = attr.initializer.expression;
+    if (!expr || !ts.isPropertyAccessExpression(expr)) return null;
+    if (!ts.isIdentifier(expr.expression)) return null;
+    const importedAs = expr.expression.text;
+    const importPath = cssModuleImports.get(importedAs);
+    if (!importPath) return null;
+    return { importedAs, importPath, binding: expr.name.text };
+  }
+  return null;
 }
 
 function readExistingVid(
