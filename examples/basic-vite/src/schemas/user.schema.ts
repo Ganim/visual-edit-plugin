@@ -5,5 +5,6 @@ export const User = z.object({
   email: z.string().email(),
   age: z.number().int().min(0).optional(),
   createdAt: z.string().datetime().optional(),
+  avatarUrl: z.string().url().optional(),
 });
 export type User = z.infer<typeof User>;

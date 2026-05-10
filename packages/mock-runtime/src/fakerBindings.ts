@@ -25,6 +25,7 @@ const STRING_FIELD_TABLE: Record<string, string> = {
   updatedAt: 'faker.date.recent().toISOString()',
   date: 'faker.date.recent().toISOString()',
   imageUrl: 'faker.image.url()',
+  avatarUrl: 'faker.image.avatar()',
   image: 'faker.image.url()',
 };
 

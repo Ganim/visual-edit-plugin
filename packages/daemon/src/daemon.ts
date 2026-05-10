@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Logger } from '@visual-edit/diagnostics';
 import { CODES, VisualEditError, makeEnvelope } from '@visual-edit/diagnostics';
-import { analyze, loadConfig, findRoutes, discoverSchemas, invalidateAnalyzer } from '@visual-edit/project-analyzer';
+import { analyze, loadConfig, findRoutes, discoverSchemas, findApiContracts, invalidateAnalyzer } from '@visual-edit/project-analyzer';
 import type { ProjectInfo } from '@visual-edit/shared';
 import type { AdapterInput } from '@visual-edit/adapter-vite';
 import { readCommitLog, rollback as codeModsRollback } from '@visual-edit/code-mods';
@@ -250,11 +250,18 @@ export class Daemon {
     const previewPort = await findFreePort(5180, 5200);
     const schemas = await discoverSchemas(this.opts.root);
 
+    // Discover API endpoint contracts and pass them to the adapter so MSW handlers
+    // are generated for all *.api.ts-declared endpoints (Phase 1.E Task 11).
+    // If findApiContracts throws VE_PROJECT_003 (orphan endpoints), propagate as-is
+    // so the caller gets a structured error rather than a silent empty handler list.
+    const endpoints = await findApiContracts(this.opts.root, schemas.map((s) => s.name));
+
     const adapterInput: AdapterInput = {
       info: this.projectInfo,
       page: matchedPage,
       config: this.projectInfo.config ?? null,
       schemas,
+      endpoints,
       port: previewPort,
       sessionId,
       env: filterEnv(process.env, this.projectInfo.config?.safeEnvPrefixes ?? ['VITE_', 'PUBLIC_', 'NEXT_PUBLIC_']),
