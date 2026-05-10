@@ -18,3 +18,4 @@ export { assertWhitespacePreservedOutsidePatches } from './invariants/whitespace
 export { runEditPipeline, type PipelineInput, type PipelineResult } from './pipeline.js';
 export { writeBackup, readBackup, listBackups, type BackupOps } from './backups.js';
 export { appendCommit, readCommitLog, findCommit, type CommitLogEntry } from './commitLog.js';
+export { commit, type CommitInput, type CommitResult } from './commit.js';
